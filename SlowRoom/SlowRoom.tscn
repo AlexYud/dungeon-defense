@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://bg4g4kxdh0bwa"]
+
+[ext_resource type="Script" uid="uid://rf0sbync7yvh" path="res://SlowRoom/slow_room.gd" id="1_ghqrb"]
+[ext_resource type="Texture2D" uid="uid://i36l28aiei8f" path="res://Assets/zombie.png" id="2_ghqrb"]
+
+[node name="SlowRoom" type="Node2D" unique_id=2114088095]
+script = ExtResource("1_ghqrb")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1747932552]
+scale = Vector2(0.2, 0.2)
+texture = ExtResource("2_ghqrb")

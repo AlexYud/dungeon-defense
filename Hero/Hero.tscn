@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://bt6f6jbpqnuoi"]
+
+[ext_resource type="Script" uid="uid://ylmxq0653eo4" path="res://Hero/hero.gd" id="1_uteef"]
+[ext_resource type="Texture2D" uid="uid://uqt085erk2nb" path="res://Assets/warrior.png" id="2_qlodb"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hkir8"]
+
+[node name="Hero" type="CharacterBody2D" unique_id=1960452547]
+script = ExtResource("1_uteef")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1163581338]
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("2_qlodb")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1262221152]
+shape = SubResource("CircleShape2D_hkir8")

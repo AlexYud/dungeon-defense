@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://rjfiskywco6v"]
+
+[ext_resource type="Script" uid="uid://b3grg7yj1247y" path="res://BatRoom/bat_room.gd" id="1_ryolu"]
+[ext_resource type="Texture2D" uid="uid://b7lhfjx82dxy8" path="res://Assets/hunter.png" id="2_ryolu"]
+
+[node name="BatRoom" type="Node2D" unique_id=642300502]
+script = ExtResource("1_ryolu")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=997642256]
+scale = Vector2(0.075, 0.075)
+texture = ExtResource("2_ryolu")
