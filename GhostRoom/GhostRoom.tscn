@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://csjdlphfn5hia"]
+
+[ext_resource type="Texture2D" uid="uid://b0n4jibf2sb0k" path="res://icon.svg" id="1_ybxr8"]
+
+[node name="GhostRoom" type="Node2D" unique_id=1387299951]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=902008860]
+modulate = Color(1, 1, 1, 0.4)
+texture = ExtResource("1_ybxr8")

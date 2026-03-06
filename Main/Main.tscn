@@ -14,18 +14,18 @@ point_count = 6
 script = ExtResource("1_lxy7q")
 
 [node name="Start" type="Marker2D" parent="." unique_id=1138339364]
-position = Vector2(100, 300)
+position = Vector2(100, 244)
 
 [node name="End" type="Marker2D" parent="." unique_id=2138332264]
-position = Vector2(1071, 324)
+position = Vector2(1074, 267)
 
 [node name="CorridorPath" type="Path2D" parent="." unique_id=758325489]
-position = Vector2(9.1666565, -11.5)
-scale = Vector2(1.5183333, 1.125)
+position = Vector2(9.1666565, -42.750042)
+scale = Vector2(1.5183333, 1.0375001)
 curve = SubResource("Curve2D_lxy7q")
 
 [node name="BatRoom" parent="." unique_id=580856777 instance=ExtResource("2_83ytx")]
-position = Vector2(459, 201)
+position = Vector2(146, 303)
 dps = 40.0
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=198005857]
@@ -43,6 +43,30 @@ offset_top = 45.0
 offset_right = 60.0
 offset_bottom = 68.0
 text = "HP: 5"
+
+[node name="ShopBar" type="PanelContainer" parent="UI" unique_id=331924287]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -110.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="ShopRow" type="HBoxContainer" parent="UI/ShopBar" unique_id=1314452430]
+layout_mode = 2
+
+[node name="ShopBtn1" type="Button" parent="UI/ShopBar/ShopRow" unique_id=416885019]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ShopBtn2" type="Button" parent="UI/ShopBar/ShopRow" unique_id=1817211320]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ShopBtn3" type="Button" parent="UI/ShopBar/ShopRow" unique_id=934290145]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="SpawnTimer" type="Timer" parent="." unique_id=1198883993]
 wait_time = 0.7
