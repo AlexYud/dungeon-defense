@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://dphnye3xsn23g"]
+
+[ext_resource type="Script" uid="uid://b5tk7vurf60ym" path="res://MainGrid/hero_grid.gd" id="1_8mcib"]
+[ext_resource type="Texture2D" uid="uid://b0n4jibf2sb0k" path="res://icon.svg" id="1_lcc0q"]
+
+[node name="HeroGrid" type="Node2D" unique_id=1104118676]
+script = ExtResource("1_8mcib")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1524506018]
+scale = Vector2(0.15, 0.15)
+texture = ExtResource("1_lcc0q")

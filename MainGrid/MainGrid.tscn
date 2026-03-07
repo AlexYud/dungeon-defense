@@ -1,0 +1,129 @@
+[gd_scene format=3 uid="uid://ck4gbcqyqqtvu"]
+
+[ext_resource type="Script" uid="uid://dhsq0akrfeixu" path="res://MainGrid/main_grid.gd" id="1_ui1q0"]
+[ext_resource type="Script" uid="uid://xg3kfj5v1sfj" path="res://MainGrid/board.gd" id="1_wtq2y"]
+[ext_resource type="Script" uid="uid://dmsjlbhmlpqos" path="res://MainGrid/camera_controller.gd" id="2_7jxad"]
+
+[node name="MainGrid" type="Node2D" unique_id=111584235]
+script = ExtResource("1_ui1q0")
+
+[node name="Board" type="Node2D" parent="." unique_id=307203064]
+script = ExtResource("1_wtq2y")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1752878398]
+script = ExtResource("2_7jxad")
+board_path = NodePath("../Board")
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=1388903866]
+
+[node name="HintLabel" type="Label" parent="UI" unique_id=515113473]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 60.0
+offset_bottom = 43.0
+text = "WASD/Arrows move | Middle mouse drag pan | Mouse wheel zoom"
+
+[node name="ShopBar" type="PanelContainer" parent="UI" unique_id=1725178791]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -120.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="ShopRow" type="HBoxContainer" parent="UI/ShopBar" unique_id=1423846891]
+layout_mode = 2
+
+[node name="CorridorCard" type="PanelContainer" parent="UI/ShopBar/ShopRow" unique_id=1322424293]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="UI/ShopBar/ShopRow/CorridorCard" unique_id=2032233112]
+layout_mode = 2
+text = "Corridor
+$0"
+horizontal_alignment = 1
+
+[node name="SpikeCard" type="PanelContainer" parent="UI/ShopBar/ShopRow" unique_id=739376613]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="UI/ShopBar/ShopRow/SpikeCard" unique_id=805864893]
+layout_mode = 2
+text = "Spike Room
+$10"
+horizontal_alignment = 1
+
+[node name="BatCard" type="PanelContainer" parent="UI/ShopBar/ShopRow" unique_id=927609322]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="UI/ShopBar/ShopRow/BatCard" unique_id=2138033275]
+layout_mode = 2
+text = "Bat Room
+$20"
+horizontal_alignment = 1
+
+[node name="BossCard" type="PanelContainer" parent="UI/ShopBar/ShopRow" unique_id=1748492778]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="UI/ShopBar/ShopRow/BossCard" unique_id=292949354]
+layout_mode = 2
+text = "Boss Room
+$40"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="UI" unique_id=984269814]
+offset_left = 20.0
+offset_top = 50.0
+offset_right = 60.0
+offset_bottom = 73.0
+text = "Path: Not connected"
+
+[node name="GoldLabel" type="Label" parent="UI" unique_id=1783354426]
+offset_left = 20.0
+offset_top = 80.0
+offset_right = 60.0
+offset_bottom = 103.0
+text = "Gold: 0"
+
+[node name="LifeLabel" type="Label" parent="UI" unique_id=51222635]
+offset_left = 20.0
+offset_top = 110.0
+offset_right = 60.0
+offset_bottom = 133.0
+text = "Life: 0"
+
+[node name="GameOverPanel" type="PanelContainer" parent="UI" unique_id=1132882873]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel" unique_id=2126070091]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="UI/GameOverPanel/VBox" unique_id=1069546203]
+layout_mode = 2
+text = "Game Over"
+
+[node name="SummaryLabel" type="Label" parent="UI/GameOverPanel/VBox" unique_id=1047005145]
+layout_mode = 2
+text = "Run summary will appear here"
+
+[node name="RestartButton" type="Button" parent="UI/GameOverPanel/VBox" unique_id=796921182]
+layout_mode = 2
+text = "OK"
+
+[node name="WaveSpawnTimer" type="Timer" parent="." unique_id=966142145]
+wait_time = 0.8
