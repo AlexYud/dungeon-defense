@@ -1,4 +1,7 @@
+class_name HeroGrid
 extends Node2D
+
+const FLOATING_TEXT_PATH: String = "res://MainGrid/FloatingText.tscn"
 
 signal reached_goal
 signal died
@@ -8,7 +11,12 @@ signal died
 @export var hero_attack_dps: float = 45.0
 @export var hero_attack_vs_boss_dps: float = 38.0
 
+@export var damage_popup_interval: float = 0.22
+
+@onready var sprite: Sprite2D = $Sprite2D
+
 var board_ref: Node2D = null
+var floating_text_scene: PackedScene = null
 
 var hp: float = 100.0
 var path_points: Array[Vector2] = []
@@ -19,8 +27,31 @@ var current_tile_type: String = ""
 var current_tile_level: int = 0
 var last_damage_room_cell: Vector2i = Vector2i(-999, -999)
 
+var pending_damage_popup: float = 0.0
+var pending_damage_popup_timer: float = 0.0
+
 func _ready() -> void:
 	hp = max_hp
+
+func configure_enemy(
+	enemy_name: String,
+	new_max_hp: float,
+	new_move_speed: float,
+	new_attack_dps: float,
+	new_attack_vs_boss_dps: float,
+	tint: Color,
+	visual_scale: float
+) -> void:
+	max_hp = new_max_hp
+	hp = max_hp
+	move_speed = new_move_speed
+	hero_attack_dps = new_attack_dps
+	hero_attack_vs_boss_dps = new_attack_vs_boss_dps
+
+	sprite.modulate = tint
+	sprite.scale = Vector2.ONE * visual_scale
+
+	name = enemy_name.capitalize()
 
 func set_board_ref(new_board: Node2D) -> void:
 	board_ref = new_board
@@ -32,7 +63,43 @@ func set_path(points: Array[Vector2]) -> void:
 	if path_points.size() > 0:
 		global_position = path_points[0]
 
-func apply_damage(amount: float, source_cell: Vector2i = Vector2i(-999, -999)) -> void:
+func ensure_floating_text_scene() -> void:
+	if floating_text_scene == null:
+		floating_text_scene = load(FLOATING_TEXT_PATH)
+
+func spawn_floating_text(text_value: String, color_value: Color, y_offset: float = -24.0) -> void:
+	ensure_floating_text_scene()
+	if floating_text_scene == null:
+		return
+
+	var popup: Node2D = floating_text_scene.instantiate() as Node2D
+	if popup == null:
+		return
+
+	get_parent().add_child(popup)
+	popup.global_position = global_position + Vector2(0.0, y_offset)
+
+	if popup.has_method("setup"):
+		popup.call("setup", text_value, color_value)
+
+func flush_pending_damage_popup() -> void:
+	if pending_damage_popup <= 0.0:
+		return
+
+	var shown_damage: int = maxi(1, int(round(pending_damage_popup)))
+	spawn_floating_text(str(shown_damage), Color(1.0, 0.78, 0.78, 1.0))
+	pending_damage_popup = 0.0
+	pending_damage_popup_timer = damage_popup_interval
+
+func queue_damage_popup(amount: float) -> void:
+	if amount <= 0.0:
+		return
+
+	pending_damage_popup += amount
+	if pending_damage_popup_timer <= 0.0:
+		pending_damage_popup_timer = damage_popup_interval
+
+func apply_damage(amount: float, source_cell: Vector2i = Vector2i(-999, -999), immediate_popup: bool = false) -> void:
 	if amount <= 0.0:
 		return
 
@@ -42,8 +109,16 @@ func apply_damage(amount: float, source_cell: Vector2i = Vector2i(-999, -999)) -
 		board_ref.register_room_damage(source_cell, amount)
 		last_damage_room_cell = source_cell
 
+	if immediate_popup:
+		var burst_value: int = maxi(1, int(round(amount)))
+		spawn_floating_text(str(burst_value), Color(1.0, 0.90, 0.35, 1.0), -28.0)
+	else:
+		queue_damage_popup(amount)
+
 	if hp <= 0.0:
 		hp = 0.0
+		flush_pending_damage_popup()
+		spawn_floating_text("KO", Color(1.0, 0.55, 0.35, 1.0), -34.0)
 
 		if board_ref != null and last_damage_room_cell.x > -900:
 			board_ref.register_room_kill(last_damage_room_cell)
@@ -52,6 +127,11 @@ func apply_damage(amount: float, source_cell: Vector2i = Vector2i(-999, -999)) -
 		queue_free()
 
 func _process(delta: float) -> void:
+	if pending_damage_popup_timer > 0.0:
+		pending_damage_popup_timer = max(0.0, pending_damage_popup_timer - delta)
+		if pending_damage_popup_timer <= 0.0:
+			flush_pending_damage_popup()
+
 	if path_points.is_empty():
 		return
 
@@ -91,9 +171,7 @@ func update_room_effects(delta: float) -> bool:
 		if current_tile_type == "spike":
 			var spike_damage: float = board_ref.try_trigger_spike(cell)
 			if spike_damage > 0.0:
-				apply_damage(spike_damage, cell)
-				if hp > 0.0:
-					print("Hero hit spike L", current_tile_level, ". HP: ", hp)
+				apply_damage(spike_damage, cell, true)
 				if hp <= 0.0:
 					return true
 
@@ -106,9 +184,6 @@ func update_room_effects(delta: float) -> bool:
 				return true
 
 			var bat_cleared: bool = board_ref.damage_bat_room(current_cell, hero_attack_dps * delta)
-			if bat_cleared:
-				print("Bat room cleared at ", current_cell)
-
 			return not bat_cleared
 
 	elif current_tile_type == "boss":
@@ -120,9 +195,6 @@ func update_room_effects(delta: float) -> bool:
 				return true
 
 			var boss_cleared: bool = board_ref.damage_boss_room(current_cell, hero_attack_vs_boss_dps * delta)
-			if boss_cleared:
-				print("Boss room cleared at ", current_cell)
-
 			return not boss_cleared
 
 	return false

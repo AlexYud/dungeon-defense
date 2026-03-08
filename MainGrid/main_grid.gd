@@ -3,20 +3,35 @@ extends Node2D
 const HERO_GRID_PATH: String = "res://MainGrid/HeroGrid.tscn"
 
 @onready var board: Node2D = $Board
-@onready var game_over_panel: PanelContainer = $UI/GameOverPanel
-@onready var game_over_summary_label: Label = $UI/GameOverPanel/VBox/SummaryLabel
+@onready var camera_controller = $Camera2D
+
 @onready var hint_label: Label = $UI/HintLabel
 @onready var status_label: Label = $UI/StatusLabel
 @onready var gold_label: Label = $UI/GoldLabel
 @onready var life_label: Label = $UI/LifeLabel
+@onready var round_label: Label = $UI/RoundLabel
+
 @onready var shop_bar: PanelContainer = $UI/ShopBar
-@onready var wave_spawn_timer: Timer = $WaveSpawnTimer
+@onready var game_over_panel: PanelContainer = $UI/GameOverPanel
+@onready var game_over_summary_label: Label = $UI/GameOverPanel/VBox/SummaryLabel
 @onready var restart_button: Button = $UI/GameOverPanel/VBox/RestartButton
+@onready var start_round_button: Button = $UI/StartRoundButton
+@onready var wave_spawn_timer: Timer = $WaveSpawnTimer
 
 @onready var corridor_card: PanelContainer = $UI/ShopBar/ShopRow/CorridorCard
 @onready var bat_card: PanelContainer = $UI/ShopBar/ShopRow/BatCard
 @onready var boss_card: PanelContainer = $UI/ShopBar/ShopRow/BossCard
 @onready var spike_card: PanelContainer = $UI/ShopBar/ShopRow/SpikeCard
+
+@onready var corridor_card_label: Label = $UI/ShopBar/ShopRow/CorridorCard/Label
+@onready var bat_card_label: Label = $UI/ShopBar/ShopRow/BatCard/Label
+@onready var spike_card_label: Label = $UI/ShopBar/ShopRow/SpikeCard/Label
+@onready var boss_card_label: Label = $UI/ShopBar/ShopRow/BossCard/Label
+
+@export var starting_gold: int = 20
+@export var starting_life: int = 10
+@export var wave_clear_bonus_base: int = 18
+@export var wave_clear_bonus_growth_per_wave: int = 2
 
 var dragged_tile_type: String = ""
 var dragged_tile_level: int = 1
@@ -25,24 +40,12 @@ var drag_origin_cell: Vector2i = Vector2i(-999, -999)
 var drag_preview: ColorRect = null
 
 var hero_scene: PackedScene = null
-var active_heroes: Array[Node2D] = []
 
-var wave_running: bool = false
-var heroes_to_spawn: int = 0
-var heroes_per_wave: int = 5
-var wave_number: int = 0
-
-@export var starting_gold: int = 100
-@export var starting_life: int = 10
-var gold: int = 100
-var life: int = 10
-var game_over: bool = false
-
-@export var gold_per_kill: int = 8
-@export var life_loss_on_escape: int = 1
+var wave_manager: WaveManager = WaveManager.new()
+var run_manager: RunManager = RunManager.new()
 
 func _ready() -> void:
-	hint_label.text = "Build: drag from shop/board | same room+level merges | RMB sell | Space = start wave"
+	hint_label.text = "Build: drag from shop/board | same room+level merges | RMB sell | Click Start Round"
 
 	corridor_card.gui_input.connect(func(event: InputEvent): _on_card_gui_input(event, "corridor"))
 	bat_card.gui_input.connect(func(event: InputEvent): _on_card_gui_input(event, "bat"))
@@ -50,16 +53,28 @@ func _ready() -> void:
 	spike_card.gui_input.connect(func(event: InputEvent): _on_card_gui_input(event, "spike"))
 
 	wave_spawn_timer.timeout.connect(_on_wave_spawn_timer_timeout)
+	restart_button.pressed.connect(_on_restart_button_pressed)
+	start_round_button.pressed.connect(_on_start_round_button_pressed)
+
+	wave_manager.wave_clear_bonus_base = wave_clear_bonus_base
+	wave_manager.wave_clear_bonus_growth_per_wave = wave_clear_bonus_growth_per_wave
+
+	run_manager.configure(starting_gold, starting_life)
+	run_manager.reset_for_new_run()
+
+	wave_spawn_timer.wait_time = wave_manager.spawn_interval
+	camera_controller.follow_while_space_held = true
+
+	game_over_panel.visible = false
+	board.reset_run_stats()
 
 	update_gold_life_ui()
 	update_connection_status()
 	update_build_run_ui()
 	update_shop_afford_visuals()
-	game_over_panel.visible = false
-	restart_button.pressed.connect(_on_restart_button_pressed)
-	gold = starting_gold
-	life = starting_life
-	board.reset_run_stats()
+	update_shop_card_texts()
+	update_shop_visibility()
+	update_round_ui()
 
 func _process(_delta: float) -> void:
 	if dragged_tile_type != "":
@@ -78,7 +93,7 @@ func _process(_delta: float) -> void:
 			update_shop_afford_visuals()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if game_over:
+	if run_manager.game_over:
 		return
 
 	if event.is_action_pressed("ui_accept"):
@@ -86,7 +101,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			start_wave()
 		return
 
-	if wave_running:
+	if wave_manager.wave_running:
 		return
 
 	if event is InputEventMouseButton:
@@ -100,49 +115,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			if dragged_tile_type == "":
 				try_sell_tile()
 
-func room_cost(tile_type: String) -> int:
-	if tile_type == "corridor":
-		return 0
-	if tile_type == "bat":
-		return 20
-	if tile_type == "spike":
-		return 10
-	if tile_type == "boss":
-		return 40
-	return 999999
-
-func sell_refund(tile_type: String, tile_level: int) -> int:
-	var base_cost: int = room_cost(tile_type)
-	if base_cost <= 0:
-		return 0
-
-	var multiplier: int = 1
-	if tile_level == 2:
-		multiplier = 2
-	elif tile_level >= 3:
-		multiplier = 4
-
-	var invested: int = base_cost * multiplier
-	return int(floor(float(invested) * 0.5))
-
-func can_afford_room(tile_type: String) -> bool:
-	return gold >= room_cost(tile_type)
-
 func spend_gold(amount: int) -> void:
-	gold = max(0, gold - amount)
+	run_manager.spend_gold(amount)
 	update_gold_life_ui()
 
 func gain_gold(amount: int) -> void:
-	gold += max(0, amount)
+	run_manager.gain_gold(amount)
 	update_gold_life_ui()
 
 func lose_life(amount: int) -> void:
-	life = max(0, life - max(0, amount))
+	var did_game_over: bool = run_manager.lose_life(amount)
 	update_gold_life_ui()
 
-	if life <= 0:
-		game_over = true
-		wave_running = false
+	if did_game_over:
+		wave_manager.wave_running = false
 		wave_spawn_timer.stop()
 		hint_label.text = "Game Over"
 		update_build_run_ui()
@@ -150,127 +136,146 @@ func lose_life(amount: int) -> void:
 		show_game_over_summary()
 
 func update_gold_life_ui() -> void:
-	gold_label.text = "Gold: %d" % gold
-	life_label.text = "Life: %d" % life
+	gold_label.text = "Gold: %d" % run_manager.gold
+	life_label.text = "Life: %d" % run_manager.life
+
+func update_round_ui() -> void:
+	round_label.text = wave_manager.get_round_label_text(run_manager.game_over)
 
 func can_start_wave() -> bool:
-	if game_over:
+	if run_manager.game_over:
 		return false
-	if wave_running:
+	if wave_manager.wave_running:
 		return false
 	if dragged_tile_type != "":
 		return false
 	return board.has_valid_connection()
 
 func start_wave() -> void:
-	board.reset_for_new_wave()
+	wave_manager.start_wave(board)
 
-	wave_running = true
-	wave_number += 1
-	heroes_to_spawn = heroes_per_wave
-
-	print("Wave ", wave_number, " started")
+	print("Wave ", wave_manager.wave_number, " started")
 	update_build_run_ui()
 	update_connection_status()
+	update_round_ui()
 
 	wave_spawn_timer.start()
 
+func _on_start_round_button_pressed() -> void:
+	if can_start_wave():
+		start_wave()
+
 func _on_wave_spawn_timer_timeout() -> void:
-	if not wave_running:
+	if not wave_manager.wave_running:
 		wave_spawn_timer.stop()
 		return
 
-	if heroes_to_spawn > 0:
-		spawn_wave_hero()
-		heroes_to_spawn -= 1
-		update_connection_status()
-
-	if heroes_to_spawn <= 0:
+	if wave_manager.wave_spawn_queue.is_empty():
 		wave_spawn_timer.stop()
+		update_connection_status()
+		update_round_ui()
+		return
 
-func spawn_wave_hero() -> void:
 	if hero_scene == null:
 		hero_scene = load(HERO_GRID_PATH)
 		if hero_scene == null:
 			push_error("Could not load hero scene at " + HERO_GRID_PATH)
 			return
 
-	var points: Array[Vector2] = board.get_path_world_points()
-	if points.is_empty():
-		print("No path points found")
-		return
+	var spawn_result: Dictionary = wave_manager.spawn_next_enemy(board, hero_scene, self)
+	var hero_instance: HeroGrid = spawn_result.get("hero", null) as HeroGrid
+	var enemy_type: String = str(spawn_result.get("enemy_type", ""))
 
-	var hero_instance: Node2D = hero_scene.instantiate() as Node2D
-	active_heroes.append(hero_instance)
+	if hero_instance != null:
+		update_camera_follow_target()
 
-	add_child(hero_instance)
-	hero_instance.set_board_ref(board)
-	hero_instance.set_path(points)
-	hero_instance.reached_goal.connect(_on_wave_hero_reached_goal.bind(hero_instance))
-	hero_instance.died.connect(_on_wave_hero_died.bind(hero_instance))
+		var gold_reward: int = wave_manager.get_enemy_gold_reward(enemy_type)
+		var escape_damage: int = wave_manager.get_enemy_escape_damage(enemy_type)
 
-func _on_wave_hero_reached_goal(hero: Node2D) -> void:
-	print("Hero reached chest")
-	board.register_escape()
-	lose_life(life_loss_on_escape)
-	remove_active_hero(hero)
-	check_wave_finished()
+		hero_instance.reached_goal.connect(_on_wave_hero_reached_goal.bind(hero_instance, escape_damage))
+		hero_instance.died.connect(_on_wave_hero_died.bind(hero_instance, gold_reward))
 
-func _on_wave_hero_died(hero: Node2D) -> void:
-	print("Hero died before reaching chest")
-	gain_gold(gold_per_kill)
-	remove_active_hero(hero)
-	check_wave_finished()
-
-func remove_active_hero(hero: Node2D) -> void:
-	var index: int = active_heroes.find(hero)
-	if index >= 0:
-		active_heroes.remove_at(index)
 	update_connection_status()
+	update_round_ui()
+
+	if wave_manager.wave_spawn_queue.is_empty():
+		wave_spawn_timer.stop()
+
+func _on_wave_hero_reached_goal(hero: HeroGrid, escape_damage: int) -> void:
+	print(hero.name, " reached chest")
+	board.register_escape()
+	lose_life(escape_damage)
+	wave_manager.remove_active_hero(hero)
+	update_camera_follow_target()
+	update_connection_status()
+	update_round_ui()
+	check_wave_finished()
+
+func _on_wave_hero_died(hero: HeroGrid, gold_reward: int) -> void:
+	print(hero.name, " died")
+	gain_gold(gold_reward)
+	wave_manager.remove_active_hero(hero)
+	update_camera_follow_target()
+	update_connection_status()
+	update_round_ui()
+	check_wave_finished()
 
 func check_wave_finished() -> void:
-	if heroes_to_spawn > 0:
+	if run_manager.game_over:
 		return
-	if not active_heroes.is_empty():
+	if not wave_manager.is_wave_finished():
 		return
 
-	wave_running = false
-	print("Wave ", wave_number, " finished")
+	wave_manager.finish_wave()
+
+	var clear_bonus: int = wave_manager.get_wave_clear_bonus_for(wave_manager.wave_number)
+	gain_gold(clear_bonus)
+
+	print("Wave ", wave_manager.wave_number, " finished | clear bonus=", clear_bonus)
 
 	update_build_run_ui()
 	update_connection_status()
 	update_shop_afford_visuals()
+	update_shop_card_texts()
+	update_shop_visibility()
+	update_round_ui()
 
 func update_build_run_ui() -> void:
-	game_over_panel.visible = game_over
-	shop_bar.visible = not wave_running and not game_over
-	game_over_panel.visible = game_over
+	shop_bar.visible = not wave_manager.wave_running and not run_manager.game_over
+	game_over_panel.visible = run_manager.game_over
+	start_round_button.visible = not wave_manager.wave_running and not run_manager.game_over
+	start_round_button.disabled = not can_start_wave()
 
-	if game_over:
+	if run_manager.game_over:
 		hint_label.text = "Game Over"
-	elif wave_running:
-		hint_label.text = "Run phase: shop hidden | camera free | wait for heroes"
+	elif wave_manager.wave_running:
+		hint_label.text = "Run phase: shop hidden | hold Space to follow first enemy | camera free otherwise"
 	else:
-		hint_label.text = "Build: drag from shop/board | same room+level merges | RMB sell | Space = start wave"
+		hint_label.text = "Build: drag from shop/board | same room+level merges | RMB sell | Click Start Round"
 
 func _on_card_gui_input(event: InputEvent, tile_type: String) -> void:
-	if game_over:
+	if run_manager.game_over:
 		return
-	if wave_running:
+	if wave_manager.wave_running:
 		return
 
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-			if not can_afford_room(tile_type):
+			if not wave_manager.is_room_unlocked_for_build(tile_type):
+				print(tile_type, " unlocks on round ", wave_manager.get_room_unlock_round(tile_type))
+				return
+
+			if not run_manager.can_afford_room(tile_type):
 				print("Not enough gold for ", tile_type)
 				return
+
 			start_drag(tile_type, 1, false, Vector2i(-999, -999))
 
 func start_drag(tile_type: String, tile_level: int, from_board: bool, origin_cell: Vector2i) -> void:
-	if game_over:
+	if run_manager.game_over:
 		return
-	if wave_running:
+	if wave_manager.wave_running:
 		return
 	if dragged_tile_type != "":
 		return
@@ -288,7 +293,7 @@ func start_drag(tile_type: String, tile_level: int, from_board: bool, origin_cel
 	update_drag_preview()
 
 func try_pickup_board_tile() -> void:
-	if wave_running:
+	if wave_manager.wave_running:
 		return
 
 	var mouse_pos: Vector2 = get_global_mouse_position()
@@ -308,7 +313,7 @@ func try_pickup_board_tile() -> void:
 	update_connection_status()
 
 func try_sell_tile() -> void:
-	if wave_running:
+	if wave_manager.wave_running:
 		return
 
 	var mouse_pos: Vector2 = get_global_mouse_position()
@@ -321,7 +326,7 @@ func try_sell_tile() -> void:
 
 	var removed: bool = board.remove_tile(cell)
 	if removed:
-		var refund: int = sell_refund(existing_type, existing_level)
+		var refund: int = run_manager.sell_refund(existing_type, existing_level)
 		gain_gold(refund)
 		print("Sold/removed ", existing_type, " L", existing_level, " at ", cell, " | refund=", refund)
 		update_connection_status()
@@ -337,7 +342,7 @@ func update_drag_preview() -> void:
 
 	drag_preview.global_position = snapped_pos - drag_preview.size * 0.5
 
-	if (not dragged_from_board) and (not can_afford_room(dragged_tile_type)):
+	if (not dragged_from_board) and (not run_manager.can_afford_room(dragged_tile_type)):
 		drag_preview.color = Color(0.9, 0.2, 0.2, 0.55)
 		return
 
@@ -370,8 +375,8 @@ func try_drop_tile() -> bool:
 	var cell: Vector2i = board.world_to_cell(mouse_pos)
 
 	if not dragged_from_board:
-		var buy_cost: int = room_cost(dragged_tile_type)
-		if gold < buy_cost:
+		var buy_cost: int = run_manager.room_cost(dragged_tile_type)
+		if run_manager.gold < buy_cost:
 			print("Not enough gold to place ", dragged_tile_type)
 			return false
 
@@ -379,7 +384,7 @@ func try_drop_tile() -> bool:
 		var placed: bool = board.place_tile(dragged_tile_type, cell, dragged_tile_level)
 		if placed:
 			if not dragged_from_board:
-				spend_gold(room_cost(dragged_tile_type))
+				spend_gold(run_manager.room_cost(dragged_tile_type))
 			print("Placed ", dragged_tile_type, " L", dragged_tile_level, " at ", cell)
 			update_shop_afford_visuals()
 			return true
@@ -388,7 +393,7 @@ func try_drop_tile() -> bool:
 		var new_level: int = board.merge_tile(dragged_tile_type, dragged_tile_level, cell)
 		if new_level > 0:
 			if not dragged_from_board:
-				spend_gold(room_cost(dragged_tile_type))
+				spend_gold(run_manager.room_cost(dragged_tile_type))
 			print("Merged ", dragged_tile_type, " L", dragged_tile_level, " -> L", new_level, " at ", cell)
 			update_shop_afford_visuals()
 			return true
@@ -413,10 +418,15 @@ func update_shop_afford_visuals() -> void:
 	update_card_afford_visual(boss_card, "boss")
 
 func update_card_afford_visual(card: PanelContainer, tile_type: String) -> void:
-	var affordable: bool = can_afford_room(tile_type)
+	var unlocked: bool = wave_manager.is_room_unlocked_for_build(tile_type)
+	var affordable: bool = run_manager.can_afford_room(tile_type)
 
-	if wave_running or game_over:
+	if wave_manager.wave_running or run_manager.game_over:
 		card.modulate = Color(0.65, 0.65, 0.65, 1.0)
+		return
+
+	if not unlocked:
+		card.modulate = Color(0.42, 0.42, 0.52, 1.0)
 		return
 
 	if affordable:
@@ -424,14 +434,37 @@ func update_card_afford_visual(card: PanelContainer, tile_type: String) -> void:
 	else:
 		card.modulate = Color(0.65, 0.45, 0.45, 1.0)
 
+func update_shop_card_texts() -> void:
+	update_card_label_text(corridor_card_label, "Corridor", 0, "corridor")
+	update_card_label_text(bat_card_label, "Bat Room", 20, "bat")
+	update_card_label_text(spike_card_label, "Spike Room", 10, "spike")
+	update_card_label_text(boss_card_label, "Boss Room", 40, "boss")
+
+func update_card_label_text(label_node: Label, display_name: String, cost: int, tile_type: String) -> void:
+	if wave_manager.is_room_unlocked_for_build(tile_type):
+		label_node.text = "%s\n$%d" % [display_name, cost]
+	else:
+		var unlock_round: int = wave_manager.get_room_unlock_round(tile_type)
+		label_node.text = "%s\n$%d\nUnlock R%d" % [display_name, cost, unlock_round]
+
+func update_shop_visibility() -> void:
+	corridor_card.visible = wave_manager.is_room_unlocked_for_build("corridor")
+	bat_card.visible = wave_manager.is_room_unlocked_for_build("bat")
+	spike_card.visible = wave_manager.is_room_unlocked_for_build("spike")
+	boss_card.visible = wave_manager.is_room_unlocked_for_build("boss")
+
 func update_connection_status() -> void:
-	if game_over:
+	if run_manager.game_over:
 		status_label.text = "Game Over"
 		status_label.modulate = Color(1.0, 0.3, 0.3, 1.0)
 		return
 
-	if wave_running:
-		status_label.text = "Wave %d running | To spawn: %d | Alive: %d" % [wave_number, heroes_to_spawn, active_heroes.size()]
+	if wave_manager.wave_running:
+		status_label.text = "Wave %d running | To spawn: %d | Alive: %d" % [
+			wave_manager.wave_number,
+			wave_manager.heroes_to_spawn,
+			wave_manager.active_heroes.size()
+		]
 		status_label.modulate = Color(0.9, 0.9, 1.0, 1.0)
 		return
 
@@ -444,6 +477,9 @@ func update_connection_status() -> void:
 		status_label.text = "Path: Not connected"
 		status_label.modulate = Color(1.0, 0.4, 0.4, 1.0)
 
+	if not run_manager.game_over and not wave_manager.wave_running:
+		start_round_button.disabled = not can_start_wave()
+
 func show_game_over_summary() -> void:
 	var lines: PackedStringArray = board.get_room_stats_summary_lines()
 	var full_text: String = ""
@@ -455,17 +491,25 @@ func show_game_over_summary() -> void:
 
 	game_over_summary_label.text = full_text
 	game_over_panel.visible = true
-	
+
+func update_camera_follow_target() -> void:
+	if wave_manager.active_heroes.is_empty():
+		camera_controller.clear_follow_target()
+		return
+
+	for hero in wave_manager.active_heroes:
+		if hero != null and is_instance_valid(hero):
+			camera_controller.set_follow_target(hero)
+			return
+
+	camera_controller.clear_follow_target()
+
 func _on_restart_button_pressed() -> void:
 	restart_run()
 
 func restart_run() -> void:
 	cleanup_active_heroes()
-
-	wave_running = false
-	game_over = false
-	heroes_to_spawn = 0
-	wave_number = 0
+	camera_controller.clear_follow_target()
 
 	if drag_preview != null:
 		drag_preview.queue_free()
@@ -476,10 +520,10 @@ func restart_run() -> void:
 	dragged_from_board = false
 	drag_origin_cell = Vector2i(-999, -999)
 
-	gold = starting_gold
-	life = starting_life
+	run_manager.reset_for_new_run()
 
 	wave_spawn_timer.stop()
+	wave_manager.reset_for_new_run()
 
 	board.reset_board_for_new_run()
 
@@ -487,12 +531,15 @@ func restart_run() -> void:
 	update_connection_status()
 	update_build_run_ui()
 	update_shop_afford_visuals()
+	update_shop_card_texts()
+	update_shop_visibility()
+	update_round_ui()
 
 	print("Run restarted")
 
 func cleanup_active_heroes() -> void:
-	for hero in active_heroes:
+	for hero in wave_manager.active_heroes:
 		if is_instance_valid(hero):
 			hero.queue_free()
 
-	active_heroes.clear()
+	wave_manager.active_heroes.clear()

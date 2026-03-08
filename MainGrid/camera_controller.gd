@@ -7,12 +7,18 @@ extends Camera2D
 # Godot Camera2D:
 # smaller = farther out
 # larger = closer in
-@export var farthest_zoom_out: float = 0.5
-@export var closest_zoom_in: float = 2.5
-@export var start_zoom: float = 0.75
+@export var farthest_zoom_out: float = 0.45
+@export var closest_zoom_in: float = 1.8
+@export var start_zoom: float = 0.7
+
+@export var follow_zoom: float = 1.25
+@export var follow_lerp_speed: float = 8.0
 
 var board: Node2D = null
 var is_panning: bool = false
+
+var follow_target: Node2D = null
+var follow_while_space_held: bool = false
 
 func _ready() -> void:
 	if board_path != NodePath(""):
@@ -26,14 +32,18 @@ func _ready() -> void:
 	zoom = Vector2(z, z)
 	clamp_to_board()
 
+func set_follow_target(target: Node2D) -> void:
+	follow_target = target
+
+func clear_follow_target() -> void:
+	follow_target = null
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 
-		# wheel up = zoom IN
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			apply_zoom(+zoom_step)
-		# wheel down = zoom OUT
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			apply_zoom(-zoom_step)
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
@@ -44,12 +54,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mb_up.button_index == MOUSE_BUTTON_MIDDLE:
 			is_panning = false
 
-	if event is InputEventMouseMotion and is_panning:
+	if event is InputEventMouseMotion and is_panning and not is_follow_mode_active():
 		var mm: InputEventMouseMotion = event as InputEventMouseMotion
 		global_position -= mm.relative / zoom.x
 		clamp_to_board()
 
 func _process(delta: float) -> void:
+	if is_follow_mode_active():
+		var target_pos: Vector2 = follow_target.global_position
+		global_position = global_position.lerp(target_pos, min(1.0, follow_lerp_speed * delta))
+
+		var desired_zoom: float = clamp(follow_zoom, farthest_zoom_out, closest_zoom_in)
+		var new_zoom: float = lerp(zoom.x, desired_zoom, min(1.0, follow_lerp_speed * delta))
+		zoom = Vector2(new_zoom, new_zoom)
+		clamp_to_board()
+		return
+
 	var dir: Vector2 = Vector2.ZERO
 
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
@@ -66,6 +86,14 @@ func _process(delta: float) -> void:
 		global_position += dir * pan_speed * delta / zoom.x
 		clamp_to_board()
 
+func is_follow_mode_active() -> bool:
+	return (
+		follow_while_space_held
+		and Input.is_key_pressed(KEY_SPACE)
+		and follow_target != null
+		and is_instance_valid(follow_target)
+	)
+
 func apply_zoom(delta_zoom: float) -> void:
 	var z: float = clamp(zoom.x + delta_zoom, farthest_zoom_out, closest_zoom_in)
 	zoom = Vector2(z, z)
@@ -79,8 +107,6 @@ func clamp_to_board() -> void:
 
 	var rect: Rect2 = board.get_board_rect_global()
 	var vp: Vector2 = get_viewport_rect().size
-
-	# Correct world half extents for Camera2D zoom
 	var half: Vector2 = (vp * 0.5) / zoom
 
 	var min_x: float = rect.position.x + half.x

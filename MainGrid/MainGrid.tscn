@@ -4,6 +4,9 @@
 [ext_resource type="Script" uid="uid://xg3kfj5v1sfj" path="res://MainGrid/board.gd" id="1_wtq2y"]
 [ext_resource type="Script" uid="uid://dmsjlbhmlpqos" path="res://MainGrid/camera_controller.gd" id="2_7jxad"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ui1q0"]
+bg_color = Color(0.039215688, 0.039215688, 0.05490196, 1)
+
 [node name="MainGrid" type="Node2D" unique_id=111584235]
 script = ExtResource("1_ui1q0")
 
@@ -13,6 +16,7 @@ script = ExtResource("1_wtq2y")
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1752878398]
 script = ExtResource("2_7jxad")
 board_path = NodePath("../Board")
+farthest_zoom_out = 0.4
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=1388903866]
 
@@ -96,19 +100,28 @@ offset_right = 60.0
 offset_bottom = 133.0
 text = "Life: 0"
 
+[node name="RoundLabel" type="Label" parent="UI" unique_id=1752166817]
+offset_left = 20.0
+offset_top = 140.0
+offset_right = 88.0
+offset_bottom = 163.0
+text = "Round: 1"
+
+[node name="StartRoundButton" type="Button" parent="UI" unique_id=2010165710]
+offset_left = 875.0
+offset_top = 409.0
+offset_right = 1144.0
+offset_bottom = 488.0
+text = "Start Round"
+
 [node name="GameOverPanel" type="PanelContainer" parent="UI" unique_id=1132882873]
 visible = false
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -20.0
-offset_top = -20.0
-offset_right = 20.0
-offset_bottom = 20.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_ui1q0")
 
 [node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel" unique_id=2126070091]
 layout_mode = 2
@@ -123,7 +136,9 @@ text = "Run summary will appear here"
 
 [node name="RestartButton" type="Button" parent="UI/GameOverPanel/VBox" unique_id=796921182]
 layout_mode = 2
-text = "OK"
+size_flags_vertical = 10
+theme_override_font_sizes/font_size = 25
+text = "RESTART"
 
 [node name="WaveSpawnTimer" type="Timer" parent="." unique_id=966142145]
 wait_time = 0.8
