@@ -10,7 +10,6 @@ signal died
 @export var max_hp: float = 100.0
 @export var hero_attack_dps: float = 45.0
 @export var hero_attack_vs_boss_dps: float = 38.0
-
 @export var damage_popup_interval: float = 0.22
 
 @onready var sprite: Sprite2D = $Sprite2D
@@ -29,6 +28,19 @@ var last_damage_room_cell: Vector2i = Vector2i(-999, -999)
 
 var pending_damage_popup: float = 0.0
 var pending_damage_popup_timer: float = 0.0
+
+# Future-ready for spike bleed card
+var bleed_time: float = 0.0
+
+# Persistent statuses
+var poison_time: float = 0.0
+var poison_dps: float = 0.0
+
+var slow_time: float = 0.0
+var slow_factor: float = 1.0
+
+# Boss control
+var boss_knockback_timer: float = 0.0
 
 func _ready() -> void:
 	hp = max_hp
@@ -126,11 +138,59 @@ func apply_damage(amount: float, source_cell: Vector2i = Vector2i(-999, -999), i
 		died.emit()
 		queue_free()
 
+func apply_poison(duration: float, dps: float) -> void:
+	poison_time = max(poison_time, duration)
+	poison_dps = max(poison_dps, dps)
+
+func apply_slow(duration: float, factor: float) -> void:
+	slow_time = max(slow_time, duration)
+	slow_factor = min(slow_factor, factor)
+
+func update_status_timers(delta: float) -> void:
+	if poison_time > 0.0:
+		poison_time = max(0.0, poison_time - delta)
+		apply_damage(poison_dps * delta)
+
+		if poison_time <= 0.0:
+			poison_dps = 0.0
+
+	if slow_time > 0.0:
+		slow_time = max(0.0, slow_time - delta)
+
+		if slow_time <= 0.0:
+			slow_factor = 1.0
+
+	if bleed_time > 0.0:
+		bleed_time = max(0.0, bleed_time - delta)
+
+func get_current_move_speed() -> float:
+	return move_speed * slow_factor
+
+func knockback_one_room() -> void:
+	if path_points.is_empty():
+		return
+	if path_index < 2:
+		return
+
+	path_index = max(1, path_index - 1)
+	global_position = path_points[path_index - 1]
+
+	current_cell = Vector2i(-999, -999)
+	current_tile_type = ""
+	current_tile_level = 0
+
+	spawn_floating_text("SLAM", Color(1.0, 0.82, 0.45, 1.0), -30.0)
+
 func _process(delta: float) -> void:
 	if pending_damage_popup_timer > 0.0:
 		pending_damage_popup_timer = max(0.0, pending_damage_popup_timer - delta)
 		if pending_damage_popup_timer <= 0.0:
 			flush_pending_damage_popup()
+
+	update_status_timers(delta)
+
+	if hp <= 0.0:
+		return
 
 	if path_points.is_empty():
 		return
@@ -155,7 +215,7 @@ func _process(delta: float) -> void:
 		path_index += 1
 		return
 
-	global_position += to_target.normalized() * move_speed * delta
+	global_position += to_target.normalized() * get_current_move_speed() * delta
 
 func update_room_effects(delta: float) -> bool:
 	if board_ref == null:
@@ -175,9 +235,29 @@ func update_room_effects(delta: float) -> bool:
 				if hp <= 0.0:
 					return true
 
+		elif current_tile_type == "gas":
+			apply_poison(
+				board_ref.gas_poison_duration_for_level(current_tile_level),
+				board_ref.gas_poison_dps_for_level(current_tile_level)
+			)
+
+		elif current_tile_type == "slow":
+			apply_slow(
+				board_ref.slow_duration_for_level(current_tile_level),
+				board_ref.slow_factor_for_level(current_tile_level)
+			)
+
+		elif current_tile_type == "boss":
+			boss_knockback_timer = board_ref.boss_knockback_interval_for_level(current_tile_level)
+
 	if current_tile_type == "bat":
 		if not board_ref.is_tile_beaten(current_cell):
 			var bat_room_dps: float = board_ref.bat_room_dps_for_level(current_tile_level)
+
+			# Future-ready: if spike later applies bleed, bats become the payoff
+			if bleed_time > 0.0:
+				bat_room_dps *= 1.35
+
 			apply_damage(bat_room_dps * delta, current_cell)
 
 			if hp <= 0.0:
@@ -195,6 +275,15 @@ func update_room_effects(delta: float) -> bool:
 				return true
 
 			var boss_cleared: bool = board_ref.damage_boss_room(current_cell, hero_attack_vs_boss_dps * delta)
-			return not boss_cleared
+			if boss_cleared:
+				return false
+
+			boss_knockback_timer -= delta
+			if boss_knockback_timer <= 0.0:
+				boss_knockback_timer = board_ref.boss_knockback_interval_for_level(current_tile_level)
+				knockback_one_room()
+				return true
+
+			return true
 
 	return false

@@ -8,14 +8,13 @@ var min_start_chest_distance: int = 6
 
 var path_hero_attack_dps: float = 45.0
 var path_hero_attack_vs_boss_dps: float = 38.0
+var dungeon_level: int = 1
 
 var start_cell: Vector2i = Vector2i.ZERO
 var chest_cell: Vector2i = Vector2i.ONE
 
-# "x,y" -> room data dictionary
 var placed_tiles: Dictionary = {}
 
-# Run stats
 var run_total_kills: int = 0
 var run_total_escapes: int = 0
 
@@ -25,7 +24,8 @@ func configure(
 	new_tile_size: int,
 	new_min_start_chest_distance: int,
 	new_path_hero_attack_dps: float,
-	new_path_hero_attack_vs_boss_dps: float
+	new_path_hero_attack_vs_boss_dps: float,
+	new_dungeon_level: int
 ) -> void:
 	cols = new_cols
 	rows = new_rows
@@ -33,6 +33,10 @@ func configure(
 	min_start_chest_distance = new_min_start_chest_distance
 	path_hero_attack_dps = new_path_hero_attack_dps
 	path_hero_attack_vs_boss_dps = new_path_hero_attack_vs_boss_dps
+	dungeon_level = new_dungeon_level
+
+func get_room_power_multiplier() -> float:
+	return 1.0 + 0.06 * float(max(0, dungeon_level - 1))
 
 func roll_start_and_chest() -> void:
 	start_cell = Vector2i(randi_range(0, cols - 1), randi_range(0, rows - 1))
@@ -94,54 +98,110 @@ func bat_count_for_level(level: int) -> int:
 	return 3
 
 func bat_room_total_hp_for_level(level: int) -> float:
+	var base_value: float = 90.0
 	match clamp(level, 1, 3):
 		1:
-			return 90.0
+			base_value = 90.0
 		2:
-			return 140.0
+			base_value = 140.0
 		3:
-			return 200.0
-	return 90.0
+			base_value = 200.0
+	return base_value * get_room_power_multiplier()
 
 func boss_hp_for_level(level: int) -> float:
+	var base_value: float = 220.0
 	match clamp(level, 1, 3):
 		1:
-			return 220.0
+			base_value = 220.0
 		2:
-			return 340.0
+			base_value = 340.0
 		3:
-			return 500.0
-	return 220.0
+			base_value = 500.0
+	return base_value * get_room_power_multiplier()
 
 func bat_room_dps_for_level(level: int) -> float:
+	var base_value: float = 14.0
 	match clamp(level, 1, 3):
 		1:
-			return 14.0
+			base_value = 14.0
 		2:
-			return 20.0
+			base_value = 20.0
 		3:
-			return 28.0
-	return 14.0
+			base_value = 28.0
+	return base_value * get_room_power_multiplier()
 
 func boss_room_dps_for_level(level: int) -> float:
+	var base_value: float = 22.0
 	match clamp(level, 1, 3):
 		1:
-			return 22.0
+			base_value = 22.0
 		2:
-			return 34.0
+			base_value = 34.0
 		3:
-			return 50.0
-	return 22.0
+			base_value = 50.0
+	return base_value * get_room_power_multiplier()
 
 func spike_damage_for_level(level: int) -> float:
+	var base_value: float = 30.0
 	match clamp(level, 1, 3):
 		1:
-			return 30.0
+			base_value = 30.0
 		2:
-			return 50.0
+			base_value = 50.0
 		3:
-			return 75.0
-	return 30.0
+			base_value = 75.0
+	return base_value * get_room_power_multiplier()
+
+func gas_poison_dps_for_level(level: int) -> float:
+	var base_value: float = 5.0
+	match clamp(level, 1, 3):
+		1:
+			base_value = 5.0
+		2:
+			base_value = 8.0
+		3:
+			base_value = 12.0
+	return base_value * get_room_power_multiplier()
+
+func gas_poison_duration_for_level(level: int) -> float:
+	match clamp(level, 1, 3):
+		1:
+			return 2.5
+		2:
+			return 3.5
+		3:
+			return 4.5
+	return 2.5
+
+func slow_factor_for_level(level: int) -> float:
+	match clamp(level, 1, 3):
+		1:
+			return 0.75
+		2:
+			return 0.60
+		3:
+			return 0.45
+	return 0.75
+
+func slow_duration_for_level(level: int) -> float:
+	match clamp(level, 1, 3):
+		1:
+			return 2.5
+		2:
+			return 3.5
+		3:
+			return 4.5
+	return 2.5
+
+func boss_knockback_interval_for_level(level: int) -> float:
+	match clamp(level, 1, 3):
+		1:
+			return 3.2
+		2:
+			return 2.8
+		3:
+			return 2.4
+	return 3.2
 
 func get_tile_data(cell: Vector2i) -> Dictionary:
 	var key: String = cell_key(cell)
@@ -396,6 +456,10 @@ func room_type_display_name(room_type: String) -> String:
 		return "Spike Room"
 	if room_type == "boss":
 		return "Boss Room"
+	if room_type == "gas":
+		return "Gas Room"
+	if room_type == "slow":
+		return "Slow Room"
 	return "None"
 
 func get_room_stats_summary_lines() -> PackedStringArray:
@@ -404,7 +468,9 @@ func get_room_stats_summary_lines() -> PackedStringArray:
 	var totals: Dictionary = {
 		"bat": {"damage": 0.0, "kills": 0},
 		"spike": {"damage": 0.0, "kills": 0},
-		"boss": {"damage": 0.0, "kills": 0}
+		"boss": {"damage": 0.0, "kills": 0},
+		"gas": {"damage": 0.0, "kills": 0},
+		"slow": {"damage": 0.0, "kills": 0}
 	}
 
 	for key_variant in placed_tiles.keys():
@@ -424,7 +490,7 @@ func get_room_stats_summary_lines() -> PackedStringArray:
 	var top_room_type: String = "None"
 	var top_kills: int = -1
 
-	for room_type in ["bat", "spike", "boss"]:
+	for room_type in ["bat", "spike", "boss", "gas", "slow"]:
 		var entry: Dictionary = totals[room_type] as Dictionary
 		var room_kills: int = int(entry.get("kills", 0))
 		if room_kills > top_kills:
@@ -436,24 +502,16 @@ func get_room_stats_summary_lines() -> PackedStringArray:
 	lines.append("Top killer room: %s" % room_type_display_name(top_room_type))
 	lines.append("")
 	lines.append("Room totals:")
-	lines.append(
-		"Bat Room   | dmg %.0f | kills %d" % [
-			float((totals["bat"] as Dictionary).get("damage", 0.0)),
-			int((totals["bat"] as Dictionary).get("kills", 0))
-		]
-	)
-	lines.append(
-		"Spike Room | dmg %.0f | kills %d" % [
-			float((totals["spike"] as Dictionary).get("damage", 0.0)),
-			int((totals["spike"] as Dictionary).get("kills", 0))
-		]
-	)
-	lines.append(
-		"Boss Room  | dmg %.0f | kills %d" % [
-			float((totals["boss"] as Dictionary).get("damage", 0.0)),
-			int((totals["boss"] as Dictionary).get("kills", 0))
-		]
-	)
+
+	for room_type in ["bat", "spike", "boss", "gas", "slow"]:
+		var entry: Dictionary = totals[room_type] as Dictionary
+		lines.append(
+			"%s | dmg %.0f | kills %d" % [
+				room_type_display_name(room_type),
+				float(entry.get("damage", 0.0)),
+				int(entry.get("kills", 0))
+			]
+		)
 
 	return lines
 
@@ -467,6 +525,36 @@ func reset_run_stats() -> void:
 		data["damage_dealt"] = 0.0
 		data["hero_kills"] = 0
 		placed_tiles[key_str] = data
+
+func refresh_room_scaling() -> void:
+	var refreshed_tiles: Dictionary = {}
+
+	for key_variant in placed_tiles.keys():
+		var key_str: String = str(key_variant)
+		var old_data: Dictionary = placed_tiles[key_variant] as Dictionary
+		var tile_type: String = str(old_data.get("type", ""))
+		var tile_level: int = int(old_data.get("level", 1))
+
+		var new_data: Dictionary = make_room_data(tile_type, tile_level)
+
+		new_data["damage_dealt"] = float(old_data.get("damage_dealt", 0.0))
+		new_data["hero_kills"] = int(old_data.get("hero_kills", 0))
+		new_data["cooldown_left"] = float(old_data.get("cooldown_left", 0.0))
+		new_data["clear_flash"] = float(old_data.get("clear_flash", 0.0))
+
+		var beaten: bool = bool(old_data.get("beaten", false))
+		new_data["beaten"] = beaten
+
+		if beaten:
+			if tile_type == "bat":
+				new_data["mob_count"] = 0
+				new_data["mob_hp"] = 0.0
+			elif tile_type == "boss":
+				new_data["boss_hp"] = 0.0
+
+		refreshed_tiles[key_str] = new_data
+
+	placed_tiles = refreshed_tiles
 
 func reset_for_new_wave() -> void:
 	var reset_tiles: Dictionary = {}
@@ -517,6 +605,12 @@ func get_cell_path_cost(cell: Vector2i) -> float:
 		if cooldown_left > 0.0:
 			return 0.0
 		return spike_damage_for_level(tile_level)
+
+	if tile_type == "gas":
+		return gas_poison_dps_for_level(tile_level) * gas_poison_duration_for_level(tile_level) * 0.65
+
+	if tile_type == "slow":
+		return 0.0
 
 	if tile_type == "bat":
 		if is_tile_beaten(cell):

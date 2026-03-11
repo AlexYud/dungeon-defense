@@ -39,6 +39,11 @@ grow_vertical = 0
 [node name="ShopRow" type="HBoxContainer" parent="UI/ShopBar" unique_id=1423846891]
 layout_mode = 2
 
+[node name="LevelButton" type="Button" parent="UI/ShopBar/ShopRow" unique_id=101090236]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Up Level"
+
 [node name="CorridorCard" type="PanelContainer" parent="UI/ShopBar/ShopRow" unique_id=1322424293]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -78,6 +83,11 @@ layout_mode = 2
 text = "Boss Room
 $40"
 horizontal_alignment = 1
+
+[node name="RotateButton" type="Button" parent="UI/ShopBar/ShopRow" unique_id=1126993574]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Rotate"
 
 [node name="StatusLabel" type="Label" parent="UI" unique_id=984269814]
 offset_left = 20.0

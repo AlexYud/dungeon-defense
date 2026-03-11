@@ -9,6 +9,7 @@ const FLOATING_TEXT_PATH: String = "res://MainGrid/FloatingText.tscn"
 
 @export var path_hero_attack_dps: float = 45.0
 @export var path_hero_attack_vs_boss_dps: float = 38.0
+@export var dungeon_level: int = 1
 
 var floating_text_scene: PackedScene = null
 
@@ -34,7 +35,8 @@ func _sync_state_config() -> void:
 		tile_size,
 		min_start_chest_distance,
 		path_hero_attack_dps,
-		path_hero_attack_vs_boss_dps
+		path_hero_attack_vs_boss_dps,
+		dungeon_level
 	)
 
 func ensure_floating_text_scene() -> void:
@@ -58,6 +60,11 @@ func spawn_room_popup(cell: Vector2i, text_value: String, color_value: Color) ->
 
 	if popup.has_method("setup"):
 		popup.call("setup", text_value, color_value)
+
+func refresh_room_scaling() -> void:
+	_sync_state_config()
+	state.refresh_room_scaling()
+	queue_redraw()
 
 func get_board_rect_global() -> Rect2:
 	var size: Vector2 = Vector2(float(cols * tile_size), float(rows * tile_size))
@@ -124,6 +131,21 @@ func bat_room_dps_for_level(level: int) -> float:
 func boss_room_dps_for_level(level: int) -> float:
 	return state.boss_room_dps_for_level(level)
 
+func gas_poison_dps_for_level(level: int) -> float:
+	return state.gas_poison_dps_for_level(level)
+
+func gas_poison_duration_for_level(level: int) -> float:
+	return state.gas_poison_duration_for_level(level)
+
+func slow_factor_for_level(level: int) -> float:
+	return state.slow_factor_for_level(level)
+
+func slow_duration_for_level(level: int) -> float:
+	return state.slow_duration_for_level(level)
+
+func boss_knockback_interval_for_level(level: int) -> float:
+	return state.boss_knockback_interval_for_level(level)
+
 func damage_bat_room(cell: Vector2i, amount: float) -> bool:
 	var result: Dictionary = state.damage_bat_room(cell, amount)
 	if bool(result.get("changed", false)):
@@ -163,10 +185,12 @@ func reset_run_stats() -> void:
 	queue_redraw()
 
 func reset_for_new_wave() -> void:
+	_sync_state_config()
 	state.reset_for_new_wave()
 	queue_redraw()
 
 func reset_board_for_new_run() -> void:
+	_sync_state_config()
 	state.reset_board_for_new_run()
 	queue_redraw()
 

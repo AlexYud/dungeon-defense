@@ -10,6 +10,10 @@ func tile_base_color(tile_type: String) -> Color:
 		return Color(0.75, 0.25, 0.25, 1.0)
 	if tile_type == "boss":
 		return Color(0.25, 0.25, 0.25, 1.0)
+	if tile_type == "gas":
+		return Color(0.25, 0.55, 0.25, 1.0)
+	if tile_type == "slow":
+		return Color(0.25, 0.50, 0.75, 1.0)
 	return Color(1.0, 1.0, 1.0, 1.0)
 
 func tile_color(tile_type: String, tile_level: int, beaten: bool, cooldown_left: float) -> Color:
@@ -125,6 +129,20 @@ func draw_boss_symbol(board: Node2D, tile_rect: Rect2, beaten: bool) -> void:
 		true
 	)
 
+func draw_gas_symbol(board: Node2D, tile_rect: Rect2) -> void:
+	var center: Vector2 = tile_rect.position + tile_rect.size * 0.5
+	board.draw_circle(center + Vector2(-10.0, 4.0), 12.0, Color(0.85, 1.0, 0.85, 0.60))
+	board.draw_circle(center + Vector2(10.0, 2.0), 14.0, Color(0.82, 1.0, 0.82, 0.55))
+	board.draw_circle(center + Vector2(0.0, -8.0), 10.0, Color(0.90, 1.0, 0.90, 0.50))
+
+func draw_slow_symbol(board: Node2D, tile_rect: Rect2) -> void:
+	var center: Vector2 = tile_rect.position + tile_rect.size * 0.5
+	var color_main: Color = Color(0.85, 0.95, 1.0, 0.85)
+
+	board.draw_line(center + Vector2(-16.0, -12.0), center + Vector2(16.0, -12.0), color_main, 4.0)
+	board.draw_line(center + Vector2(-8.0, 0.0), center + Vector2(8.0, 0.0), color_main, 4.0)
+	board.draw_line(center + Vector2(-16.0, 12.0), center + Vector2(16.0, 12.0), color_main, 4.0)
+
 func draw_beaten_overlay(board: Node2D, tile_rect: Rect2) -> void:
 	var overlay: Color = Color(1.0, 1.0, 1.0, 0.16)
 	board.draw_rect(tile_rect, overlay, true)
@@ -157,6 +175,10 @@ func draw_tile_symbol(board: Node2D, tile_rect: Rect2, tile_data: Dictionary, ti
 		draw_bat_symbol(board, tile_rect, mob_count, beaten)
 	elif tile_type == "boss":
 		draw_boss_symbol(board, tile_rect, beaten)
+	elif tile_type == "gas":
+		draw_gas_symbol(board, tile_rect)
+	elif tile_type == "slow":
+		draw_slow_symbol(board, tile_rect)
 
 	if beaten and (tile_type == "bat" or tile_type == "boss"):
 		draw_beaten_overlay(board, tile_rect)
