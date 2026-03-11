@@ -33,7 +33,7 @@ const HERO_GRID_PATH: String = "res://MainGrid/HeroGrid.tscn"
 @onready var offer3_card: PanelContainer = $UI/ShopBar/ShopRow/BossCard
 @onready var offer3_label: Label = $UI/ShopBar/ShopRow/BossCard/Label
 
-@export var starting_gold: int = 20
+@export var starting_gold: int = 20000000000000
 @export var starting_life: int = 10
 @export var wave_clear_bonus_base: int = 18
 @export var wave_clear_bonus_growth_per_wave: int = 2
