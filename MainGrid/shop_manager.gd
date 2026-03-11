@@ -19,8 +19,12 @@ func get_room_unlock_level(tile_type: String) -> int:
 			return 1
 		"spike":
 			return 5
-		"boss":
+		"gas":
 			return 10
+		"boss":
+			return 15
+		"slow":
+			return 20
 	return 999999
 
 func is_room_unlocked(tile_type: String) -> bool:
@@ -33,8 +37,12 @@ func get_unlocked_room_pool() -> Array[String]:
 		pool.append("bat")
 	if is_room_unlocked("spike"):
 		pool.append("spike")
+	if is_room_unlocked("gas"):
+		pool.append("gas")
 	if is_room_unlocked("boss"):
 		pool.append("boss")
+	if is_room_unlocked("slow"):
+		pool.append("slow")
 
 	return pool
 
@@ -80,7 +88,11 @@ func level_up() -> String:
 	if dungeon_level == 5:
 		return "spike"
 	if dungeon_level == 10:
+		return "gas"
+	if dungeon_level == 15:
 		return "boss"
+	if dungeon_level == 20:
+		return "slow"
 
 	return ""
 

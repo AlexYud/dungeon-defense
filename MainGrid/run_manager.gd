@@ -24,6 +24,10 @@ func room_cost(tile_type: String) -> int:
 		return 20
 	if tile_type == "spike":
 		return 10
+	if tile_type == "gas":
+		return 12
+	if tile_type == "slow":
+		return 14
 	if tile_type == "boss":
 		return 40
 	return 999999

@@ -135,6 +135,10 @@ func room_display_name(tile_type: String) -> String:
 		return "Bat Room"
 	if tile_type == "spike":
 		return "Spike Room"
+	if tile_type == "gas":
+		return "Gas Room"
+	if tile_type == "slow":
+		return "Slow Room"
 	if tile_type == "boss":
 		return "Boss Room"
 	return "Unknown"
@@ -344,6 +348,10 @@ func preview_color(tile_type: String, merge_preview: bool) -> Color:
 		return Color(0.75, 0.35, 0.75, 0.55)
 	if tile_type == "spike":
 		return Color(0.9, 0.35, 0.35, 0.55)
+	if tile_type == "gas":
+		return Color(0.35, 0.75, 0.35, 0.55)
+	if tile_type == "slow":
+		return Color(0.35, 0.65, 0.9, 0.55)
 	if tile_type == "boss":
 		return Color(0.45, 0.45, 0.45, 0.55)
 	return Color(1.0, 1.0, 1.0, 0.55)
