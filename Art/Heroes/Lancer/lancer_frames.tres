@@ -5,17 +5,17 @@
 [ext_resource type="Texture2D" uid="uid://de3q56sat3fpr" path="res://Art/Heroes/Lancer/Lancer_Idle.png" id="3_t288g"]
 [ext_resource type="Texture2D" uid="uid://x71hy2co6ykv" path="res://Art/Heroes/Lancer/Lancer_Run.png" id="4_elirc"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_aeg0x"]
+[sub_resource type="AtlasTexture" id="AtlasTexture_unndn"]
 atlas = ExtResource("1_unndn")
-region = Rect2(55, 0, 300, 320)
+region = Rect2(0, 0, 320, 320)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_aikt4"]
+[sub_resource type="AtlasTexture" id="AtlasTexture_oe24f"]
 atlas = ExtResource("1_unndn")
-region = Rect2(355, 0, 300, 320)
+region = Rect2(320, 0, 320, 320)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_7ft6b"]
+[sub_resource type="AtlasTexture" id="AtlasTexture_t288g"]
 atlas = ExtResource("1_unndn")
-region = Rect2(655, 0, 300, 320)
+region = Rect2(640, 0, 320, 320)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_f111h"]
 atlas = ExtResource("2_oe24f")
@@ -117,13 +117,13 @@ region = Rect2(1600, 0, 320, 320)
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_aeg0x")
+"texture": SubResource("AtlasTexture_unndn")
 }, {
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_aikt4")
+"texture": SubResource("AtlasTexture_oe24f")
 }, {
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_7ft6b")
+"texture": SubResource("AtlasTexture_t288g")
 }],
 "loop": false,
 "name": &"attack_1",

@@ -96,8 +96,7 @@ func try_trigger_spike(cell: Vector2i) -> float:
 	if cooldown_left > 0.0:
 		return 0.0
 
-	var tile_level: int = int(data.get("level", 1))
-	var damage: float = state.spike_damage_for_level(tile_level)
+	var damage: float = state.get_spike_damage_for_cell(cell)
 
 	data["cooldown_left"] = 3.0
 	state.set_tile_data(cell, data)

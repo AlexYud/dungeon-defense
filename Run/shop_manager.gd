@@ -15,6 +15,8 @@ func start_build_phase() -> void:
 
 func get_room_unlock_level(tile_type: String) -> int:
 	match tile_type:
+		"altar":
+			return 1
 		"bat":
 			return 1
 		"spike":
@@ -33,6 +35,8 @@ func is_room_unlocked(tile_type: String) -> bool:
 func get_unlocked_room_pool() -> Array[String]:
 	var pool: Array[String] = []
 
+	if is_room_unlocked("altar"):
+		pool.append("altar")
 	if is_room_unlocked("bat"):
 		pool.append("bat")
 	if is_room_unlocked("spike"):

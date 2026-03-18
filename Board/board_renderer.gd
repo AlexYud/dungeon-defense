@@ -14,6 +14,8 @@ func tile_base_color(tile_type: String) -> Color:
 		return Color(0.25, 0.55, 0.25, 1.0)
 	if tile_type == "slow":
 		return Color(0.25, 0.50, 0.75, 1.0)
+	if tile_type == "altar":
+		return Color(0.64, 0.54, 0.18, 1.0)
 	return Color(1.0, 1.0, 1.0, 1.0)
 
 func tile_color(tile_type: String, tile_level: int, beaten: bool, cooldown_left: float) -> Color:
@@ -140,6 +142,39 @@ func draw_slow_symbol(board: Node2D, tile_rect: Rect2) -> void:
 	board.draw_line(center + Vector2(-8.0, 0.0), center + Vector2(8.0, 0.0), color_main, 4.0)
 	board.draw_line(center + Vector2(-16.0, 12.0), center + Vector2(16.0, 12.0), color_main, 4.0)
 
+func draw_altar_symbol(board: Node2D, tile_rect: Rect2) -> void:
+	var center: Vector2 = tile_rect.position + tile_rect.size * 0.5
+	var glow_color: Color = Color(1.0, 0.94, 0.70, 0.28)
+	var stone_color: Color = Color(0.98, 0.92, 0.76, 0.92)
+
+	board.draw_circle(center + Vector2(0.0, -10.0), 18.0, glow_color)
+
+	board.draw_rect(
+		Rect2(center + Vector2(-18.0, 18.0), Vector2(36.0, 10.0)),
+		Color(0.32, 0.28, 0.18, 0.85),
+		true
+	)
+
+	board.draw_rect(
+		Rect2(center + Vector2(-10.0, -8.0), Vector2(20.0, 28.0)),
+		stone_color,
+		true
+	)
+
+	board.draw_line(
+		center + Vector2(-12.0, 6.0),
+		center + Vector2(12.0, 6.0),
+		Color(0.78, 0.68, 0.28, 0.90),
+		3.0
+	)
+	board.draw_line(
+		center + Vector2(0.0, -6.0),
+		center + Vector2(0.0, 18.0),
+		Color(0.78, 0.68, 0.28, 0.90),
+		3.0
+	)
+	board.draw_circle(center + Vector2(0.0, -12.0), 5.0, Color(1.0, 0.97, 0.80, 0.95))
+
 func draw_beaten_overlay(board: Node2D, tile_rect: Rect2) -> void:
 	var overlay: Color = Color(1.0, 1.0, 1.0, 0.16)
 	board.draw_rect(tile_rect, overlay, true)
@@ -176,6 +211,8 @@ func draw_tile_symbol(board: Node2D, tile_rect: Rect2, tile_data: Dictionary, ti
 		draw_gas_symbol(board, tile_rect)
 	elif tile_type == "slow":
 		draw_slow_symbol(board, tile_rect)
+	elif tile_type == "altar":
+		draw_altar_symbol(board, tile_rect)
 
 	if beaten and (tile_type == "bat" or tile_type == "boss"):
 		draw_beaten_overlay(board, tile_rect)
@@ -251,6 +288,20 @@ func draw_level_up_feedback(board: Node2D, tile_rect: Rect2, level_up_flash: flo
 		4.0
 	)
 
+func draw_support_buff_overlay(board: Node2D, tile_rect: Rect2, damage_multiplier: float) -> void:
+	if damage_multiplier <= 1.001:
+		return
+
+	var strength: float = clamp((damage_multiplier - 1.0) / 0.50, 0.0, 1.0)
+	var fill_alpha: float = 0.05 + 0.08 * strength
+	var border_alpha: float = 0.34 + 0.30 * strength
+	var glow_color: Color = Color(1.0, 0.92, 0.52, fill_alpha)
+	var edge_color: Color = Color(1.0, 0.94, 0.70, border_alpha)
+
+	board.draw_rect(tile_rect.grow(-6.0), glow_color, true)
+	board.draw_rect(tile_rect.grow(-3.0), edge_color, false, 4.0)
+	board.draw_circle(tile_rect.position + Vector2(14.0, tile_rect.size.y - 14.0), 4.0, edge_color)
+
 func draw(board: Node2D, state: BoardState) -> void:
 	var w: float = float(state.cols * state.tile_size)
 	var h: float = float(state.rows * state.tile_size)
@@ -274,6 +325,8 @@ func draw(board: Node2D, state: BoardState) -> void:
 		var clear_flash: float = float(tile_data.get("clear_flash", 0.0))
 		var merge_flash: float = float(tile_data.get("merge_flash", 0.0))
 		var level_up_flash: float = float(tile_data.get("level_up_flash", 0.0))
+		var cell: Vector2i = Vector2i(cx, cy)
+		var damage_multiplier: float = state.get_room_damage_multiplier_for_cell(cell)
 
 		var tile_rect: Rect2 = Rect2(
 			Vector2(float(cx * state.tile_size), float(cy * state.tile_size)),
@@ -290,6 +343,7 @@ func draw(board: Node2D, state: BoardState) -> void:
 		draw_clear_flash(board, tile_rect, clear_flash)
 		draw_merge_feedback(board, tile_rect, merge_flash)
 		draw_level_up_feedback(board, tile_rect, level_up_flash)
+		draw_support_buff_overlay(board, tile_rect, damage_multiplier)
 
 		if tile_level > 1:
 			draw_level_pips(board, tile_rect, tile_level)

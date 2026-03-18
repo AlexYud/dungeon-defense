@@ -42,7 +42,10 @@ func update_room_effects(delta: float) -> bool:
 	if hero.board_ref == null:
 		return false
 
-	var cell: Vector2i = hero.board_ref.world_to_cell(hero.global_position)
+	var cell: Vector2i = hero.movement.get_tracked_path_cell()
+
+	if cell == INVALID_CELL:
+		cell = hero.board_ref.world_to_cell(hero.global_position)
 
 	if cell != current_cell:
 		var died_on_entry: bool = process_room_entry(cell)

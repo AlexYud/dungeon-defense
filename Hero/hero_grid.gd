@@ -39,9 +39,13 @@ func _init() -> void:
 	room_logic = HeroRoomLogic.new(self)
 
 func _ready() -> void:
+	add_to_group("wave_heroes")
+
 	statuses.hp = max_hp
 	sprite_scene_scale = sprite.scale
 	apply_sprite_visual_scale()
+	if sprite != null:
+		sprite.flip_h = false
 	play_anim("idle")
 
 func configure_enemy(
@@ -60,8 +64,8 @@ func configure_enemy(
 	hero_attack_vs_boss_dps = new_attack_vs_boss_dps
 
 	current_visual_scale = visual_scale
-	combat_attack_timer = 0.0
-	next_attack_index = 0
+	combat_attack_timer = randf_range(0.0, combat_attack_interval)
+	next_attack_index = int(get_instance_id()) % 2
 
 	apply_visual_set(enemy_name)
 
@@ -70,8 +74,9 @@ func configure_enemy(
 
 	name = enemy_name.capitalize()
 
-	var lane_slot: int = int(get_instance_id()) % 3
-	movement.set_lane_offset(float(lane_slot - 1) * 10.0)
+	var lane_slot: int = int(get_instance_id()) % 5
+	movement.set_lane_offset(float(lane_slot - 2) * 8.0)
+	movement.configure_party_profile(int(get_instance_id()))
 
 func apply_visual_set(enemy_name: String) -> void:
 	if sprite == null:
@@ -98,6 +103,14 @@ func apply_sprite_visual_scale() -> void:
 
 	sprite.scale = sprite_scene_scale * current_visual_scale
 
+func update_sprite_facing_from_motion(motion: Vector2) -> void:
+	if sprite == null:
+		return
+	if absf(motion.x) < 1.5:
+		return
+
+	sprite.flip_h = motion.x < 0.0
+
 func set_board_ref(new_board: Node2D) -> void:
 	board_ref = new_board
 
@@ -107,6 +120,7 @@ func set_path(points: Array[Vector2]) -> void:
 func _process(delta: float) -> void:
 	var hp_before_frame: float = statuses.hp
 	var knockback_before_frame: bool = movement.is_knockback_animating
+	var frame_start_position: Vector2 = global_position
 
 	combat_attack_timer = max(0.0, combat_attack_timer - delta)
 
@@ -126,21 +140,27 @@ func _process(delta: float) -> void:
 	if movement.is_knockback_animating:
 		play_anim("run")
 		movement.update_knockback_animation(delta)
+		update_sprite_facing_from_motion(global_position - frame_start_position)
 		emit_frame_feedback(hp_before_frame, knockback_before_frame)
 		return
 
 	var blocked_by_room: bool = room_logic.update_room_effects(delta)
-	emit_frame_feedback(hp_before_frame, knockback_before_frame)
 
 	if statuses.hp <= 0.0:
+		update_sprite_facing_from_motion(global_position - frame_start_position)
+		emit_frame_feedback(hp_before_frame, knockback_before_frame)
 		play_anim("idle")
 		return
 
 	if blocked_by_room:
+		update_sprite_facing_from_motion(global_position - frame_start_position)
+		emit_frame_feedback(hp_before_frame, knockback_before_frame)
 		update_combat_animation()
 		return
 
 	if movement.path_index >= movement.path_points.size():
+		update_sprite_facing_from_motion(global_position - frame_start_position)
+		emit_frame_feedback(hp_before_frame, knockback_before_frame)
 		play_anim("idle")
 		reached_goal.emit()
 		queue_free()
@@ -148,6 +168,8 @@ func _process(delta: float) -> void:
 
 	play_anim("run")
 	movement.update_forward_movement(delta)
+	update_sprite_facing_from_motion(global_position - frame_start_position)
+	emit_frame_feedback(hp_before_frame, knockback_before_frame)
 
 func update_combat_animation() -> void:
 	if is_attack_anim_playing():

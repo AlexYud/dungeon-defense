@@ -1,14 +1,14 @@
 class_name RoomLogicBat
 extends RoomLogicBase
 
-func update_room(cell: Vector2i, level: int, delta: float) -> bool:
+func update_room(cell: Vector2i, _level: int, delta: float) -> bool:
 	if hero.board_ref.is_tile_beaten(cell):
 		hero.movement.reset_combat_motion()
 		return false
 
 	hero.movement.move_to_room_center_or_wobble(delta)
 
-	var bat_room_dps: float = hero.board_ref.bat_room_dps_for_level(level)
+	var bat_room_dps: float = hero.board_ref.bat_room_dps_for_cell(cell)
 	if hero.statuses.bleed_time > 0.0:
 		bat_room_dps *= 1.35
 

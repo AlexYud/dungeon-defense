@@ -61,6 +61,12 @@ var speed_buttons: Array[Button] = []
 
 var level_button_pulse_time: float = 0.0
 
+var bonus_card_panel: PanelContainer = null
+var bonus_card_title_label: Label = null
+var bonus_card_buttons: Array[Button] = []
+var pending_bonus_choices: Array[String] = []
+var awaiting_bonus_pick: bool = false
+
 func _ready() -> void:
 	hint_label.text = "Build: L-drag empty tiles = corridor brush | level up, buy offers, rotate shop"
 
@@ -85,6 +91,7 @@ func _ready() -> void:
 	shop_manager.reset_for_new_run()
 
 	board.dungeon_level = shop_manager.dungeon_level
+	board.set_run_bonus_modifiers(run_manager.get_active_bonus_modifiers())
 	board.refresh_room_scaling()
 
 	wave_spawn_timer.wait_time = wave_manager.spawn_interval
@@ -94,6 +101,7 @@ func _ready() -> void:
 	board.reset_run_stats()
 
 	create_speed_controls()
+	create_bonus_card_panel()
 	set_game_speed(1.0)
 
 	call_deferred("_refresh_ui_feedback_pivots")
@@ -103,6 +111,7 @@ func _ready() -> void:
 	update_build_run_ui()
 	update_shop_ui()
 	update_round_ui()
+	update_bonus_card_panel()
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
@@ -166,6 +175,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if run_manager.game_over:
 		return
 
+	if awaiting_bonus_pick:
+		return
+
 	if event.is_action_pressed("ui_accept"):
 		if can_start_wave():
 			start_wave()
@@ -206,6 +218,9 @@ func corridor_paint_key(cell: Vector2i) -> String:
 	return "%d,%d" % [cell.x, cell.y]
 
 func paint_corridor_at(cell: Vector2i) -> void:
+	if awaiting_bonus_pick:
+		return
+
 	if not board.can_place_tile("corridor", cell):
 		return
 
@@ -225,6 +240,8 @@ func stop_painting_corridor() -> void:
 func room_display_name(tile_type: String) -> String:
 	if tile_type == "corridor":
 		return "Corridor"
+	if tile_type == "altar":
+		return "Altar"
 	if tile_type == "bat":
 		return "Bat Room"
 	if tile_type == "spike":
@@ -236,6 +253,17 @@ func room_display_name(tile_type: String) -> String:
 	if tile_type == "boss":
 		return "Boss Room"
 	return "Unknown"
+
+func is_damage_room_for_support_feedback(tile_type: String) -> bool:
+	if tile_type == "spike":
+		return true
+	if tile_type == "gas":
+		return true
+	if tile_type == "bat":
+		return true
+	if tile_type == "boss":
+		return true
+	return false
 
 func create_speed_controls() -> void:
 	if ui_root == null:
@@ -275,6 +303,112 @@ func create_speed_controls() -> void:
 		speed_buttons.append(button)
 
 	update_speed_button_visuals()
+
+func create_bonus_card_panel() -> void:
+	if ui_root == null:
+		return
+
+	if bonus_card_panel != null and is_instance_valid(bonus_card_panel):
+		return
+
+	bonus_card_panel = PanelContainer.new()
+	bonus_card_panel.name = "BonusCardPanel"
+	ui_root.add_child(bonus_card_panel)
+
+	bonus_card_panel.set_anchors_preset(Control.PRESET_CENTER)
+	bonus_card_panel.offset_left = -380.0
+	bonus_card_panel.offset_top = -150.0
+	bonus_card_panel.offset_right = 380.0
+	bonus_card_panel.offset_bottom = 150.0
+	bonus_card_panel.visible = false
+
+	var root_vbox: VBoxContainer = VBoxContainer.new()
+	bonus_card_panel.add_child(root_vbox)
+	root_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root_vbox.offset_left = 14.0
+	root_vbox.offset_top = 14.0
+	root_vbox.offset_right = -14.0
+	root_vbox.offset_bottom = -14.0
+	root_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	root_vbox.add_theme_constant_override("separation", 10)
+
+	bonus_card_title_label = Label.new()
+	bonus_card_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bonus_card_title_label.text = "Choose a bonus"
+	root_vbox.add_child(bonus_card_title_label)
+
+	var card_row: HBoxContainer = HBoxContainer.new()
+	card_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	card_row.add_theme_constant_override("separation", 10)
+	root_vbox.add_child(card_row)
+
+	bonus_card_buttons.clear()
+
+	for i in range(3):
+		var button: Button = Button.new()
+		button.custom_minimum_size = Vector2(220.0, 150.0)
+		button.text = ""
+		button.clip_text = false
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.pressed.connect(_on_bonus_card_button_pressed.bind(i))
+		card_row.add_child(button)
+		bonus_card_buttons.append(button)
+
+func update_bonus_card_panel() -> void:
+	if bonus_card_panel == null:
+		return
+
+	bonus_card_panel.visible = awaiting_bonus_pick and not run_manager.game_over
+
+	if not bonus_card_panel.visible:
+		return
+
+	bonus_card_title_label.text = "Choose 1 bonus for Round %d" % wave_manager.get_next_round_number()
+
+	for i in range(bonus_card_buttons.size()):
+		var button: Button = bonus_card_buttons[i]
+
+		if i < pending_bonus_choices.size():
+			var card_id: String = pending_bonus_choices[i]
+			button.visible = true
+			button.disabled = false
+			button.text = "%s\n\n%s" % [
+				run_manager.get_bonus_card_title(card_id),
+				run_manager.get_bonus_card_description(card_id)
+			]
+		else:
+			button.visible = false
+
+func present_bonus_card_choices() -> void:
+	pending_bonus_choices = run_manager.roll_bonus_card_choices(3)
+	awaiting_bonus_pick = not pending_bonus_choices.is_empty()
+	update_bonus_card_panel()
+
+func _on_bonus_card_button_pressed(choice_index: int) -> void:
+	if not awaiting_bonus_pick:
+		return
+	if choice_index < 0 or choice_index >= pending_bonus_choices.size():
+		return
+
+	var chosen_card: String = pending_bonus_choices[choice_index]
+
+	run_manager.apply_bonus_card(chosen_card)
+	board.set_run_bonus_modifiers(run_manager.get_active_bonus_modifiers())
+	board.refresh_room_scaling()
+
+	awaiting_bonus_pick = false
+	pending_bonus_choices.clear()
+	update_bonus_card_panel()
+
+	shop_manager.start_build_phase()
+	board.trigger_bonus_card_pick_feedback(chosen_card)
+
+	print("Picked bonus card: ", run_manager.get_bonus_card_title(chosen_card))
+
+	update_build_run_ui()
+	update_connection_status()
+	update_shop_ui()
+	update_round_ui()
 
 func _on_speed_button_pressed(multiplier: float) -> void:
 	set_game_speed(multiplier)
@@ -339,6 +473,8 @@ func can_start_wave() -> bool:
 		return false
 	if dragged_tile_type != "":
 		return false
+	if awaiting_bonus_pick:
+		return false
 	return board.has_valid_connection()
 
 func start_wave() -> void:
@@ -356,7 +492,7 @@ func _on_start_round_button_pressed() -> void:
 		start_wave()
 
 func _on_level_button_pressed() -> void:
-	if run_manager.game_over or wave_manager.wave_running:
+	if run_manager.game_over or wave_manager.wave_running or awaiting_bonus_pick:
 		return
 
 	var cost: int = shop_manager.get_level_up_cost()
@@ -364,12 +500,15 @@ func _on_level_button_pressed() -> void:
 		print("Not enough gold to level up")
 		return
 
+	var old_dungeon_level: int = shop_manager.dungeon_level
+
 	spend_gold(cost)
 
 	var newly_unlocked_room: String = shop_manager.level_up()
 	board.dungeon_level = shop_manager.dungeon_level
 	board.refresh_room_scaling()
 	board.trigger_level_up_feedback()
+	board.trigger_dungeon_level_stat_popups(old_dungeon_level, shop_manager.dungeon_level)
 	trigger_level_button_feedback()
 
 	if newly_unlocked_room != "":
@@ -379,7 +518,7 @@ func _on_level_button_pressed() -> void:
 	update_shop_ui()
 
 func _on_rotate_button_pressed() -> void:
-	if run_manager.game_over or wave_manager.wave_running:
+	if run_manager.game_over or wave_manager.wave_running or awaiting_bonus_pick:
 		return
 
 	var cost: int = shop_manager.get_rotate_cost()
@@ -394,7 +533,7 @@ func _on_rotate_button_pressed() -> void:
 	update_shop_ui()
 
 func _on_corridor_card_gui_input(event: InputEvent) -> void:
-	if run_manager.game_over or wave_manager.wave_running:
+	if run_manager.game_over or wave_manager.wave_running or awaiting_bonus_pick:
 		return
 
 	if event is InputEventMouseButton:
@@ -403,7 +542,7 @@ func _on_corridor_card_gui_input(event: InputEvent) -> void:
 			start_drag("corridor", 1, false, Vector2i(-999, -999), -1)
 
 func _on_offer_card_gui_input(event: InputEvent, slot_index: int) -> void:
-	if run_manager.game_over or wave_manager.wave_running:
+	if run_manager.game_over or wave_manager.wave_running or awaiting_bonus_pick:
 		return
 
 	if event is InputEventMouseButton:
@@ -424,6 +563,8 @@ func start_drag(tile_type: String, tile_level: int, from_board: bool, origin_cel
 		return
 	if wave_manager.wave_running:
 		return
+	if awaiting_bonus_pick:
+		return
 	if dragged_tile_type != "":
 		return
 
@@ -441,7 +582,7 @@ func start_drag(tile_type: String, tile_level: int, from_board: bool, origin_cel
 	update_drag_preview()
 
 func try_pickup_board_tile() -> void:
-	if wave_manager.wave_running:
+	if wave_manager.wave_running or awaiting_bonus_pick:
 		return
 
 	var mouse_pos: Vector2 = get_global_mouse_position()
@@ -461,7 +602,7 @@ func try_pickup_board_tile() -> void:
 	update_connection_status()
 
 func try_sell_tile() -> void:
-	if wave_manager.wave_running:
+	if wave_manager.wave_running or awaiting_bonus_pick:
 		return
 
 	var mouse_pos: Vector2 = get_global_mouse_position()
@@ -506,6 +647,8 @@ func preview_color(tile_type: String, merge_preview: bool) -> Color:
 
 	if tile_type == "corridor":
 		return Color(0.7, 0.7, 0.9, 0.55)
+	if tile_type == "altar":
+		return Color(0.92, 0.78, 0.30, 0.55)
 	if tile_type == "bat":
 		return Color(0.75, 0.35, 0.75, 0.55)
 	if tile_type == "spike":
@@ -539,6 +682,11 @@ func try_drop_tile() -> bool:
 				shop_manager.clear_offer(dragged_offer_slot)
 				update_shop_ui()
 
+			if dragged_tile_type == "altar":
+				board.trigger_support_room_stat_popups(cell, 0, dragged_tile_level)
+			elif is_damage_room_for_support_feedback(dragged_tile_type):
+				board.trigger_room_support_gain_popup(cell)
+
 			print("Placed ", dragged_tile_type, " L", dragged_tile_level, " at ", cell)
 			return true
 
@@ -551,6 +699,10 @@ func try_drop_tile() -> bool:
 				update_shop_ui()
 
 			board.trigger_merge_feedback(cell)
+			board.trigger_merge_stat_popup(cell, dragged_tile_type, dragged_tile_level, new_level)
+
+			if dragged_tile_type == "altar":
+				board.trigger_support_room_stat_popups(cell, dragged_tile_level, new_level)
 
 			print("Merged ", dragged_tile_type, " L", dragged_tile_level, " -> L", new_level, " at ", cell)
 			return true
@@ -582,7 +734,7 @@ func update_shop_ui() -> void:
 func update_level_button_text() -> void:
 	var level_cost: int = shop_manager.get_level_up_cost()
 	level_button.text = "Dungeon Lv %d\nUp $%d" % [shop_manager.dungeon_level, level_cost]
-	level_button.disabled = wave_manager.wave_running or run_manager.game_over or run_manager.gold < level_cost
+	level_button.disabled = wave_manager.wave_running or run_manager.game_over or awaiting_bonus_pick or run_manager.gold < level_cost
 
 func update_rotate_button_text() -> void:
 	var rotate_cost: int = shop_manager.get_rotate_cost()
@@ -591,7 +743,7 @@ func update_rotate_button_text() -> void:
 	else:
 		rotate_button.text = "Rotate\n$%d" % rotate_cost
 
-	rotate_button.disabled = wave_manager.wave_running or run_manager.game_over or run_manager.gold < rotate_cost
+	rotate_button.disabled = wave_manager.wave_running or run_manager.game_over or awaiting_bonus_pick or run_manager.gold < rotate_cost
 
 func update_corridor_card_ui() -> void:
 	corridor_card_label.text = "Corridor\n$0"
@@ -618,7 +770,7 @@ func update_shop_afford_visuals() -> void:
 	update_offer_card_visual(offer3_card, shop_manager.get_offer(2))
 
 func update_corridor_card_visual() -> void:
-	if wave_manager.wave_running or run_manager.game_over:
+	if wave_manager.wave_running or run_manager.game_over or awaiting_bonus_pick:
 		corridor_card.modulate = Color(0.65, 0.65, 0.65, 1.0)
 	else:
 		corridor_card.modulate = Color(1.0, 1.0, 1.0, 1.0)
@@ -628,7 +780,7 @@ func update_offer_card_visual(card: PanelContainer, offer_type: String) -> void:
 		card.modulate = Color(1.0, 1.0, 1.0, 1.0)
 		return
 
-	if wave_manager.wave_running or run_manager.game_over:
+	if wave_manager.wave_running or run_manager.game_over or awaiting_bonus_pick:
 		card.modulate = Color(0.65, 0.65, 0.65, 1.0)
 		return
 
@@ -712,7 +864,7 @@ func check_wave_finished() -> void:
 	var clear_bonus: int = wave_manager.get_wave_clear_bonus_for(wave_manager.wave_number)
 	gain_gold(clear_bonus)
 
-	shop_manager.start_build_phase()
+	present_bonus_card_choices()
 
 	print("Wave ", wave_manager.wave_number, " finished | clear bonus=", clear_bonus)
 
@@ -722,16 +874,22 @@ func check_wave_finished() -> void:
 	update_round_ui()
 
 func update_build_run_ui() -> void:
-	hint_label.text = "Build: L-drag empty tiles = corridor brush | level up, buy offers, rotate shop"
-	shop_bar.visible = not wave_manager.wave_running and not run_manager.game_over
+	var normal_build_phase: bool = not wave_manager.wave_running and not run_manager.game_over and not awaiting_bonus_pick
+
+	shop_bar.visible = normal_build_phase
 	game_over_panel.visible = run_manager.game_over
-	start_round_button.visible = not wave_manager.wave_running and not run_manager.game_over
+	start_round_button.visible = normal_build_phase
 	start_round_button.disabled = not can_start_wave()
+
+	if bonus_card_panel != null:
+		bonus_card_panel.visible = awaiting_bonus_pick and not run_manager.game_over
 
 	if run_manager.game_over:
 		hint_label.text = "Game Over"
 	elif wave_manager.wave_running:
 		hint_label.text = "Run phase: shop hidden | hold Space to follow first enemy | use 1x / 2x / 3x top-right"
+	elif awaiting_bonus_pick:
+		hint_label.text = "Reward phase: choose 1 bonus card before building"
 	else:
 		hint_label.text = "Build: level up, buy offers, rotate shop, set speed, then start round"
 
@@ -749,6 +907,11 @@ func update_connection_status() -> void:
 			get_speed_status_text()
 		]
 		status_label.modulate = Color(0.9, 0.9, 1.0, 1.0)
+		return
+
+	if awaiting_bonus_pick:
+		status_label.text = "Choose a bonus card%s" % get_speed_status_text()
+		status_label.modulate = Color(1.0, 0.92, 0.55, 1.0)
 		return
 
 	var connected: bool = board.has_valid_connection()
@@ -807,10 +970,15 @@ func restart_run() -> void:
 	run_manager.reset_for_new_run()
 	shop_manager.reset_for_new_run()
 
+	awaiting_bonus_pick = false
+	pending_bonus_choices.clear()
+	update_bonus_card_panel()
+
 	wave_spawn_timer.stop()
 	wave_manager.reset_for_new_run()
 
 	board.dungeon_level = shop_manager.dungeon_level
+	board.set_run_bonus_modifiers(run_manager.get_active_bonus_modifiers())
 	board.reset_board_for_new_run()
 	board.refresh_room_scaling()
 

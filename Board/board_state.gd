@@ -9,6 +9,7 @@ var min_start_chest_distance: int = 6
 var path_hero_attack_dps: float = 45.0
 var path_hero_attack_vs_boss_dps: float = 38.0
 var dungeon_level: int = 1
+var run_bonus_modifiers: Dictionary = {}
 
 var start_cell: Vector2i = Vector2i.ZERO
 var chest_cell: Vector2i = Vector2i.ONE
@@ -34,7 +35,8 @@ func configure(
 	new_min_start_chest_distance: int,
 	new_path_hero_attack_dps: float,
 	new_path_hero_attack_vs_boss_dps: float,
-	new_dungeon_level: int
+	new_dungeon_level: int,
+	new_run_bonus_modifiers: Dictionary = {}
 ) -> void:
 	cols = new_cols
 	rows = new_rows
@@ -43,9 +45,16 @@ func configure(
 	path_hero_attack_dps = new_path_hero_attack_dps
 	path_hero_attack_vs_boss_dps = new_path_hero_attack_vs_boss_dps
 	dungeon_level = new_dungeon_level
+	run_bonus_modifiers = new_run_bonus_modifiers.duplicate(true)
 
 func get_room_power_multiplier() -> float:
 	return 1.0 + 0.06 * float(max(0, dungeon_level - 1))
+
+func get_run_bonus_multiplier(key: String) -> float:
+	return float(run_bonus_modifiers.get(key, 1.0))
+
+func get_run_bonus_add(key: String) -> float:
+	return float(run_bonus_modifiers.get(key, 0.0))
 
 func roll_start_and_chest() -> void:
 	start_cell = Vector2i(randi_range(0, cols - 1), randi_range(0, rows - 1))
@@ -71,6 +80,20 @@ func is_cell_inside(cell: Vector2i) -> bool:
 
 func is_cell_blocked(cell: Vector2i) -> bool:
 	return cell == start_cell or cell == chest_cell
+
+func is_support_room_type(tile_type: String) -> bool:
+	return tile_type == "altar"
+
+func is_damage_buffable_room_type(tile_type: String) -> bool:
+	if tile_type == "spike":
+		return true
+	if tile_type == "gas":
+		return true
+	if tile_type == "bat":
+		return true
+	if tile_type == "boss":
+		return true
+	return false
 
 func make_room_data(tile_type: String, tile_level: int) -> Dictionary:
 	return balance.make_room_data(tile_type, tile_level)
@@ -107,6 +130,9 @@ func slow_duration_for_level(level: int) -> float:
 
 func boss_knockback_interval_for_level(level: int) -> float:
 	return balance.boss_knockback_interval_for_level(level)
+
+func support_room_damage_multiplier(tile_type: String, level: int) -> float:
+	return balance.support_room_damage_multiplier(tile_type, level)
 
 func get_tile_data(cell: Vector2i) -> Dictionary:
 	var key: String = cell_key(cell)
@@ -157,7 +183,7 @@ func is_mergeable_type(tile_type: String) -> bool:
 	return tile_type != "" and tile_type != "corridor"
 
 func is_scalable_room_type(tile_type: String) -> bool:
-	return tile_type != "" and tile_type != "corridor"
+	return tile_type != "" and tile_type != "corridor" and not is_support_room_type(tile_type)
 
 func can_place_tile(tile_type: String, cell: Vector2i) -> bool:
 	if tile_type == "":
@@ -294,6 +320,104 @@ func get_room_stats_summary_lines() -> PackedStringArray:
 func reset_run_stats() -> void:
 	stats.reset_run_stats()
 
+func get_adjacent_support_damage_multiplier(cell: Vector2i) -> float:
+	var best_multiplier: float = 1.0
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0),
+		Vector2i(-1, 0),
+		Vector2i(0, 1),
+		Vector2i(0, -1)
+	]
+
+	for dir in dirs:
+		var neighbor: Vector2i = cell + dir
+		if not is_cell_inside(neighbor):
+			continue
+
+		var neighbor_type: String = get_tile_type(neighbor)
+		if not is_support_room_type(neighbor_type):
+			continue
+
+		var neighbor_level: int = get_tile_level(neighbor)
+		var neighbor_multiplier: float = support_room_damage_multiplier(neighbor_type, neighbor_level)
+		if neighbor_multiplier > best_multiplier:
+			best_multiplier = neighbor_multiplier
+
+	return best_multiplier
+
+func get_adjacent_support_damage_multiplier_with_override(
+	cell: Vector2i,
+	override_cell: Vector2i,
+	override_type: String,
+	override_level: int,
+	override_present: bool
+) -> float:
+	var best_multiplier: float = 1.0
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0),
+		Vector2i(-1, 0),
+		Vector2i(0, 1),
+		Vector2i(0, -1)
+	]
+
+	for dir in dirs:
+		var neighbor: Vector2i = cell + dir
+		if not is_cell_inside(neighbor):
+			continue
+
+		var neighbor_type: String = ""
+		var neighbor_level: int = 0
+
+		if neighbor == override_cell:
+			if not override_present:
+				continue
+			neighbor_type = override_type
+			neighbor_level = override_level
+		else:
+			neighbor_type = get_tile_type(neighbor)
+			if not is_support_room_type(neighbor_type):
+				continue
+			neighbor_level = get_tile_level(neighbor)
+
+		if not is_support_room_type(neighbor_type):
+			continue
+
+		var neighbor_multiplier: float = support_room_damage_multiplier(neighbor_type, neighbor_level)
+		if neighbor_multiplier > best_multiplier:
+			best_multiplier = neighbor_multiplier
+
+	return best_multiplier
+
+func get_room_damage_multiplier_for_cell(cell: Vector2i) -> float:
+	var tile_type: String = get_tile_type(cell)
+	if not is_damage_buffable_room_type(tile_type):
+		return 1.0
+	return get_adjacent_support_damage_multiplier(cell)
+
+func get_spike_damage_for_cell(cell: Vector2i) -> float:
+	var level: int = get_tile_level(cell)
+	if level <= 0:
+		return 0.0
+	return spike_damage_for_level(level) * get_room_damage_multiplier_for_cell(cell)
+
+func get_gas_poison_dps_for_cell(cell: Vector2i) -> float:
+	var level: int = get_tile_level(cell)
+	if level <= 0:
+		return 0.0
+	return gas_poison_dps_for_level(level) * get_room_damage_multiplier_for_cell(cell)
+
+func get_bat_room_dps_for_cell(cell: Vector2i) -> float:
+	var level: int = get_tile_level(cell)
+	if level <= 0:
+		return 0.0
+	return bat_room_dps_for_level(level) * get_room_damage_multiplier_for_cell(cell)
+
+func get_boss_room_dps_for_cell(cell: Vector2i) -> float:
+	var level: int = get_tile_level(cell)
+	if level <= 0:
+		return 0.0
+	return boss_room_dps_for_level(level) * get_room_damage_multiplier_for_cell(cell)
+
 func refresh_room_scaling() -> void:
 	var refreshed_tiles: Dictionary = {}
 
@@ -357,7 +481,14 @@ func is_cell_traversable(cell: Vector2i) -> bool:
 		return true
 	if cell == chest_cell:
 		return true
-	return has_tile(cell)
+
+	var tile_type: String = get_tile_type(cell)
+	if tile_type == "":
+		return false
+	if is_support_room_type(tile_type):
+		return false
+
+	return true
 
 func get_cell_path_cost(cell: Vector2i) -> float:
 	return balance.get_cell_path_cost(cell)
